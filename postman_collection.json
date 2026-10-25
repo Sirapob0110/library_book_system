@@ -1,0 +1,1752 @@
+{
+  "info": {
+    "name": "Book Information System API - Phase 2",
+    "description": "Postman collection ที่ export จากการทดสอบ endpoint จริงทั้งหมด (พร้อม saved examples)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "createdBookId",
+      "value": "7"
+    }
+  ],
+  "item": [
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "GET /api/books - รายการหนังสือทั้งหมด",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"book_id\": 1,\n      \"title\": \"นอร์วีเจียนวูด\",\n      \"isbn\": \"9780099448822\",\n      \"published_year\": 1987,\n      \"price\": \"295.00\",\n      \"author_id\": 2,\n      \"author_name\": \"Haruki Murakami\"\n    },\n    {\n      \"book_id\": 2,\n      \"title\": \"1Q84\",\n      \"isbn\": \"9780099549302\",\n      \"published_year\": 2009,\n      \"price\": \"450.00\",\n      \"author_id\": 2,\n      \"author_name\": \"Haruki Murakami\"\n    },\n    {\n      \"book_id\": 3,\n      \"title\": \"Harry Potter and the Philosopher's Stone\",\n      \"isbn\": \"9780747532699\",\n      \"published_year\": 1997,\n      \"price\": \"320.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\"\n    },\n    {\n      \"book_id\": 4,\n      \"title\": \"Harry Potter and the Chamber of Secrets\",\n      \"isbn\": \"9780747538493\",\n      \"published_year\": 1998,\n      \"price\": \"330.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\"\n    },\n    {\n      \"book_id\": 5,\n      \"title\": \"คู่กรรม\",\n      \"isbn\": \"9789742350001\",\n      \"published_year\": 1965,\n      \"price\": \"250.00\",\n      \"author_id\": 4,\n      \"author_name\": \"ทมยันตี\"\n    },\n    {\n      \"book_id\": 6,\n      \"title\": \"บันทึกจากลูกผู้ชาย\",\n      \"isbn\": \"9789742350123\",\n      \"published_year\": 2003,\n      \"price\": \"180.00\",\n      \"author_id\": 1,\n      \"author_name\": \"เสกสรรค์ ประเสริฐกุล\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/books?q= - ค้นหาหนังสือ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books?q=Harry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Harry"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books?q=Harry",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "Harry"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"book_id\": 3,\n      \"title\": \"Harry Potter and the Philosopher's Stone\",\n      \"isbn\": \"9780747532699\",\n      \"published_year\": 1997,\n      \"price\": \"320.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\"\n    },\n    {\n      \"book_id\": 4,\n      \"title\": \"Harry Potter and the Chamber of Secrets\",\n      \"isbn\": \"9780747538493\",\n      \"published_year\": 1998,\n      \"price\": \"330.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/books/{id} - รายละเอียดหนังสือ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "3"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/3",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "3"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"book_id\": 3,\n    \"title\": \"Harry Potter and the Philosopher's Stone\",\n    \"isbn\": \"9780747532699\",\n    \"published_year\": 1997,\n    \"price\": \"320.00\",\n    \"author_id\": 3,\n    \"author_name\": \"J.K. Rowling\",\n    \"nationality\": \"British\",\n    \"categories\": [\n      {\n        \"category_id\": 1,\n        \"name\": \"นวนิยาย\"\n      },\n      {\n        \"category_id\": 2,\n        \"name\": \"แฟนตาซี\"\n      },\n      {\n        \"category_id\": 4,\n        \"name\": \"วรรณกรรมเยาวชน\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/books/{id} - ไม่พบหนังสือ (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "999"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/999",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "999"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ไม่พบหนังสือเล่มนี้\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/books - เพิ่มหนังสือ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });",
+                  "pm.collectionVariables.set(\"createdBookId\", pm.response.json().data.book_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Kafka on the Shore\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2002,\n  \"price\": 399,\n  \"category_ids\": [\n    1,\n    2\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Kafka on the Shore\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2002,\n  \"price\": 399,\n  \"category_ids\": [\n    1,\n    2\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"book_id\": 7,\n    \"title\": \"Kafka on the Shore\",\n    \"isbn\": \"9781400079278\",\n    \"published_year\": 2002,\n    \"price\": \"399.00\",\n    \"author_id\": 2,\n    \"author_name\": \"Haruki Murakami\",\n    \"nationality\": \"Japanese\",\n    \"categories\": [\n      {\n        \"category_id\": 1,\n        \"name\": \"นวนิยาย\"\n      },\n      {\n        \"category_id\": 2,\n        \"name\": \"แฟนตาซี\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/books - ขาด title (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"111\",\n  \"author_id\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isbn\": \"111\",\n  \"author_id\": 2\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"title จำเป็นต้องระบุ\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/books - ISBN ซ้ำ (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409\", function () { pm.response.to.have.status(409); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dup\",\n  \"isbn\": \"9780099448822\",\n  \"author_id\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "409 Conflict",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Dup\",\n  \"isbn\": \"9780099448822\",\n  \"author_id\": 2\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ข้อมูลซ้ำ (เช่น ISBN หรือชื่อหมวดหมู่มีอยู่แล้ว)\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/books - author_id ไม่มีอยู่ (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad\",\n  \"isbn\": \"222\",\n  \"author_id\": 999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Bad\",\n  \"isbn\": \"222\",\n  \"author_id\": 999\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"author_id หรือ category_ids ที่ระบุไม่มีอยู่ในระบบ\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/books/{id} - แก้ไขหนังสือ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Kafka on the Shore (2nd printing)\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2005,\n  \"price\": 420,\n  \"category_ids\": [\n    2\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "{{createdBookId}}"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Kafka on the Shore (2nd printing)\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2005,\n  \"price\": 420,\n  \"category_ids\": [\n    2\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"book_id\": 7,\n    \"title\": \"Kafka on the Shore (2nd printing)\",\n    \"isbn\": \"9781400079278\",\n    \"published_year\": 2005,\n    \"price\": \"420.00\",\n    \"author_id\": 2,\n    \"author_name\": \"Haruki Murakami\",\n    \"nationality\": \"Japanese\",\n    \"categories\": [\n      {\n        \"category_id\": 2,\n        \"name\": \"แฟนตาซี\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/books/{id} - ไม่พบหนังสือ (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "999"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Kafka on the Shore (2nd printing)\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2005,\n  \"price\": 420,\n  \"category_ids\": [\n    2\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/999",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "999"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Kafka on the Shore (2nd printing)\",\n  \"isbn\": \"9781400079278\",\n  \"author_id\": 2,\n  \"published_year\": 2005,\n  \"price\": 420,\n  \"category_ids\": [\n    2\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ไม่พบหนังสือเล่มนี้\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/books/{id} - ลบหนังสือ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "{{createdBookId}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"deleted_book_id\": 7\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/books/{id} - ลบซ้ำ ไม่พบหนังสือ (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "{{createdBookId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/{{createdBookId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "{{createdBookId}}"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ไม่พบหนังสือเล่มนี้\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authors",
+      "item": [
+        {
+          "name": "GET /api/authors - รายการผู้แต่ง",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/authors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "authors"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"author_id\": 2,\n      \"name\": \"Haruki Murakami\",\n      \"nationality\": \"Japanese\",\n      \"birth_year\": 1949\n    },\n    {\n      \"author_id\": 3,\n      \"name\": \"J.K. Rowling\",\n      \"nationality\": \"British\",\n      \"birth_year\": 1965\n    },\n    {\n      \"author_id\": 4,\n      \"name\": \"ทมยันตี\",\n      \"nationality\": \"Thai\",\n      \"birth_year\": 1937\n    },\n    {\n      \"author_id\": 1,\n      \"name\": \"เสกสรรค์ ประเสริฐกุล\",\n      \"nationality\": \"Thai\",\n      \"birth_year\": 1949\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/authors - เพิ่มผู้แต่ง",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Natsume Soseki\",\n  \"nationality\": \"Japanese\",\n  \"birth_year\": 1867\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/authors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "authors"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Natsume Soseki\",\n  \"nationality\": \"Japanese\",\n  \"birth_year\": 1867\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"author_id\": 5,\n    \"name\": \"Natsume Soseki\",\n    \"nationality\": \"Japanese\",\n    \"birth_year\": 1867\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/authors - ขาด name (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationality\": \"Thai\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/authors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "authors"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nationality\": \"Thai\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"name จำเป็นต้องระบุ\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/authors/{id}/books - หนังสือของผู้แต่ง",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors/2/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors",
+                "2",
+                "books"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/authors/2/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "authors",
+                    "2",
+                    "books"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"author\": {\n      \"author_id\": 2,\n      \"name\": \"Haruki Murakami\"\n    },\n    \"books\": [\n      {\n        \"book_id\": 1,\n        \"title\": \"นอร์วีเจียนวูด\",\n        \"isbn\": \"9780099448822\",\n        \"published_year\": 1987,\n        \"price\": \"295.00\"\n      },\n      {\n        \"book_id\": 2,\n        \"title\": \"1Q84\",\n        \"isbn\": \"9780099549302\",\n        \"published_year\": 2009,\n        \"price\": \"450.00\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/authors/{id}/books - ไม่พบผู้แต่ง (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authors/999/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authors",
+                "999",
+                "books"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/authors/999/books",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "authors",
+                    "999",
+                    "books"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ไม่พบผู้แต่งคนนี้\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "GET /api/categories - รายการหมวดหมู่",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "categories"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"category_id\": 1,\n      \"name\": \"นวนิยาย\"\n    },\n    {\n      \"category_id\": 4,\n      \"name\": \"วรรณกรรมเยาวชน\"\n    },\n    {\n      \"category_id\": 3,\n      \"name\": \"สารคดี\"\n    },\n    {\n      \"category_id\": 2,\n      \"name\": \"แฟนตาซี\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/categories - เพิ่มหมวดหมู่",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ประวัติศาสตร์\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"ประวัติศาสตร์\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"category_id\": 5,\n    \"name\": \"ประวัติศาสตร์\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/categories - ชื่อซ้ำ (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409\", function () { pm.response.to.have.status(409); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ประวัติศาสตร์\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "409 Conflict",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"ประวัติศาสตร์\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ข้อมูลซ้ำ (เช่น ISBN หรือชื่อหมวดหมู่มีอยู่แล้ว)\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/categories - ขาด name (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"name จำเป็นต้องระบุ\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "External",
+      "item": [
+        {
+          "name": "GET /api/books/{id}/external-info - ข้อมูลจาก Open Library",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", true); });",
+                  "pm.test(\"source is open-library or fallback\", function () { pm.expect([\"open-library\",\"fallback\"]).to.include(pm.response.json().data.source); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/3/external-info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "3",
+                "external-info"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/3/external-info",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "3",
+                    "external-info"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"book\": {\n      \"book_id\": 3,\n      \"title\": \"Harry Potter and the Philosopher's Stone\",\n      \"isbn\": \"9780747532699\",\n      \"published_year\": 1997,\n      \"price\": \"320.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\",\n      \"nationality\": \"British\",\n      \"categories\": [\n        {\n          \"category_id\": 1,\n          \"name\": \"นวนิยาย\"\n        },\n        {\n          \"category_id\": 2,\n          \"name\": \"แฟนตาซี\"\n        },\n        {\n          \"category_id\": 4,\n          \"name\": \"วรรณกรรมเยาวชน\"\n        }\n      ]\n    },\n    \"source\": \"open-library\",\n    \"found\": true,\n    \"attempts\": 1,\n    \"external\": {\n      \"title\": \"Harry Potter and the Philosopher's Stone\",\n      \"publishers\": [\n        \"Bloomsbury\"\n      ],\n      \"publish_date\": \"1997\",\n      \"number_of_pages\": 223,\n      \"cover_url\": \"https://covers.openlibrary.org/b/id/10110415-M.jpg\",\n      \"url\": \"https://openlibrary.org/books/OL7353617M\"\n    }\n  }\n}"
+            },
+            {
+              "name": "200 OK (fallback: API ภายนอกล้มเหลว)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/3/external-info",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "3",
+                    "external-info"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"book\": {\n      \"book_id\": 3,\n      \"title\": \"Harry Potter and the Philosopher's Stone\",\n      \"isbn\": \"9780747532699\",\n      \"published_year\": 1997,\n      \"price\": \"320.00\",\n      \"author_id\": 3,\n      \"author_name\": \"J.K. Rowling\",\n      \"nationality\": \"British\",\n      \"categories\": [\n        {\n          \"category_id\": 1,\n          \"name\": \"นวนิยาย\"\n        },\n        {\n          \"category_id\": 2,\n          \"name\": \"แฟนตาซี\"\n        },\n        {\n          \"category_id\": 4,\n          \"name\": \"วรรณกรรมเยาวชน\"\n        }\n      ]\n    },\n    \"source\": \"fallback\",\n    \"found\": false,\n    \"attempts\": 3,\n    \"external\": null,\n    \"message\": \"ไม่สามารถดึงข้อมูลเพิ่มเติมจาก Open Library ได้ในขณะนี้ แสดงเฉพาะข้อมูลในระบบ กรุณาลองใหม่ภายหลัง\",\n    \"fallback_reason\": \"ECONNREFUSED\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/books/{id}/external-info - ไม่พบหนังสือ (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"Response is JSON with success flag\", function () { pm.expect(pm.response.json()).to.have.property(\"success\", false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/books/999/external-info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "books",
+                "999",
+                "external-info"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/books/999/external-info",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "books",
+                    "999",
+                    "external-info"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"ไม่พบหนังสือเล่มนี้\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

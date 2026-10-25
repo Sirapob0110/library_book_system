@@ -1,0 +1,423 @@
+openapi: 3.0.3
+info:
+  title: Book Information System API
+  description: >
+    API ระบบข้อมูลหนังสือ (โครงงานระยะที่ 2) จัดการหนังสือ ผู้แต่ง และหมวดหมู่
+    พร้อมดึงข้อมูลเพิ่มเติมจาก Open Library (มี retry / timeout / fallback)
+  version: 2.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Books
+    description: จัดการข้อมูลหนังสือ
+  - name: Authors
+    description: จัดการข้อมูลผู้แต่ง
+  - name: Categories
+    description: จัดการหมวดหมู่
+  - name: External
+    description: การเชื่อมต่อ API ภายนอก
+
+paths:
+  /api/books:
+    get:
+      tags: [Books]
+      summary: รายการหนังสือทั้งหมด (ค้นหาได้)
+      description: คืนรายการหนังสือพร้อมชื่อผู้แต่ง ถ้าระบุ q จะค้นจากชื่อเรื่องหรือชื่อผู้แต่ง
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: คำค้นหา (ชื่อเรื่องหรือชื่อผู้แต่ง)
+          schema: { type: string }
+          example: Harry
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/BookSummary' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Books]
+      summary: เพิ่มหนังสือใหม่
+      description: เพิ่มหนังสือพร้อมกำหนดหมวดหมู่ (ทำใน transaction เดียว)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookInput' }
+      responses:
+        '201':
+          description: สร้างสำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookDetailResponse' }
+        '400':
+          description: ข้อมูลไม่ถูกต้อง หรือ author_id / category_ids ไม่มีอยู่ในระบบ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: ISBN ซ้ำ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/books/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookId'
+    get:
+      tags: [Books]
+      summary: รายละเอียดหนังสือ
+      description: คืนข้อมูลหนังสือพร้อมผู้แต่งและหมวดหมู่ทั้งหมด
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookDetailResponse' }
+        '404': { $ref: '#/components/responses/BookNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    put:
+      tags: [Books]
+      summary: แก้ไขหนังสือ
+      description: >
+        แก้ไขข้อมูลหนังสือ ถ้าส่ง category_ids มาจะแทนที่หมวดหมู่เดิมทั้งหมด
+        (ถ้าไม่ส่งจะคงหมวดหมู่เดิม)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookInput' }
+      responses:
+        '200':
+          description: แก้ไขสำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookDetailResponse' }
+        '400':
+          description: ข้อมูลไม่ถูกต้อง หรือ author_id / category_ids ไม่มีอยู่ในระบบ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/BookNotFound' }
+        '409':
+          description: ISBN ซ้ำกับหนังสือเล่มอื่น
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [Books]
+      summary: ลบหนังสือ
+      responses:
+        '200':
+          description: ลบสำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      deleted_book_id: { type: integer, example: 7 }
+        '404': { $ref: '#/components/responses/BookNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/books/{id}/external-info:
+    parameters:
+      - $ref: '#/components/parameters/BookId'
+    get:
+      tags: [External]
+      summary: ข้อมูลเพิ่มเติมของหนังสือจาก Open Library
+      description: >
+        ดึงข้อมูลเพิ่มเติม (สำนักพิมพ์ จำนวนหน้า ปก) จาก Open Library ด้วยเลข ISBN
+        ค่าเริ่มต้น timeout 3000 ms ต่อครั้ง และ retry อัตโนมัติได้อีก 2 ครั้ง (รวมสูงสุด 3 attempts); ปรับได้ผ่าน environment variables
+        เมื่อล้มเหลวทั้งหมดจะใช้ fallback: ตอบ 200 พร้อมข้อมูลในระบบและ `source = fallback`
+        แทนที่จะส่ง error
+      responses:
+        '200':
+          description: >
+            สำเร็จ — `source = open-library` เมื่อได้ข้อมูลจาก API ภายนอก
+            หรือ `source = fallback` เมื่อ API ภายนอกล้มเหลว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/ExternalInfo' }
+        '404': { $ref: '#/components/responses/BookNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/authors:
+    get:
+      tags: [Authors]
+      summary: รายการผู้แต่งทั้งหมด
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Author' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Authors]
+      summary: เพิ่มผู้แต่งใหม่
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthorInput' }
+      responses:
+        '201':
+          description: สร้างสำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Author' }
+        '400':
+          description: ข้อมูลไม่ถูกต้อง
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/authors/{id}/books:
+    get:
+      tags: [Authors]
+      summary: หนังสือทั้งหมดของผู้แต่งคนหนึ่ง
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: รหัสผู้แต่ง
+          schema: { type: integer }
+          example: 2
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      author:
+                        type: object
+                        properties:
+                          author_id: { type: integer, example: 2 }
+                          name: { type: string, example: Haruki Murakami }
+                      books:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuthorBook' }
+        '404':
+          description: ไม่พบผู้แต่ง
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: รายการหมวดหมู่ทั้งหมด
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Categories]
+      summary: เพิ่มหมวดหมู่ใหม่
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: ประวัติศาสตร์ }
+      responses:
+        '201':
+          description: สร้างสำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Category' }
+        '400':
+          description: ข้อมูลไม่ถูกต้อง
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: ชื่อหมวดหมู่ซ้ำ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+components:
+  parameters:
+    BookId:
+      name: id
+      in: path
+      required: true
+      description: รหัสหนังสือ (book_id)
+      schema: { type: integer }
+      example: 1
+  responses:
+    BookNotFound:
+      description: ไม่พบหนังสือ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { success: false, message: ไม่พบหนังสือเล่มนี้ }
+    ServerError:
+      description: ข้อผิดพลาดภายในเซิร์ฟเวอร์
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { success: false, message: เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์ }
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: title จำเป็นต้องระบุ }
+    Category:
+      type: object
+      properties:
+        category_id: { type: integer, example: 1 }
+        name: { type: string, example: นวนิยาย }
+    Author:
+      type: object
+      properties:
+        author_id: { type: integer, example: 2 }
+        name: { type: string, example: Haruki Murakami }
+        nationality: { type: string, nullable: true, example: Japanese }
+        birth_year: { type: integer, nullable: true, example: 1949 }
+    AuthorInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: Natsume Soseki }
+        nationality: { type: string, nullable: true, example: Japanese }
+        birth_year: { type: integer, nullable: true, example: 1867 }
+    AuthorBook:
+      type: object
+      properties:
+        book_id: { type: integer, example: 1 }
+        title: { type: string, example: นอร์วีเจียนวูด }
+        isbn: { type: string, example: '9780099448822' }
+        published_year: { type: integer, nullable: true, example: 1987 }
+        price: { type: string, description: DECIMAL ส่งเป็น string, example: '295.00' }
+    BookSummary:
+      type: object
+      properties:
+        book_id: { type: integer, example: 3 }
+        title: { type: string, example: Harry Potter and the Philosopher's Stone }
+        isbn: { type: string, example: '9780747532699' }
+        published_year: { type: integer, nullable: true, example: 1997 }
+        price: { type: string, description: DECIMAL ส่งเป็น string, example: '320.00' }
+        author_id: { type: integer, example: 3 }
+        author_name: { type: string, example: J.K. Rowling }
+    BookDetail:
+      allOf:
+        - $ref: '#/components/schemas/BookSummary'
+        - type: object
+          properties:
+            nationality: { type: string, nullable: true, example: British }
+            categories:
+              type: array
+              items: { $ref: '#/components/schemas/Category' }
+    BookDetailResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/BookDetail' }
+    BookInput:
+      type: object
+      required: [title, isbn, author_id]
+      properties:
+        title: { type: string, example: Kafka on the Shore }
+        isbn: { type: string, example: '9781400079278' }
+        author_id: { type: integer, example: 2 }
+        published_year: { type: integer, nullable: true, example: 2002 }
+        price: { type: number, minimum: 0, example: 399 }
+        category_ids:
+          type: array
+          items: { type: integer }
+          example: [1, 2]
+    ExternalInfo:
+      type: object
+      properties:
+        book: { $ref: '#/components/schemas/BookDetail' }
+        source:
+          type: string
+          enum: [open-library, fallback]
+          description: แหล่งที่มาของข้อมูลภายนอก
+          example: open-library
+        found:
+          type: boolean
+          description: พบข้อมูลใน API ภายนอกหรือไม่
+          example: true
+        attempts:
+          type: integer
+          description: จำนวนครั้งที่เรียก API ภายนอก (รวมครั้งแรก)
+          example: 1
+        external:
+          type: object
+          nullable: true
+          properties:
+            title: { type: string, nullable: true }
+            publishers:
+              type: array
+              items: { type: string }
+            publish_date: { type: string, nullable: true }
+            number_of_pages: { type: integer, nullable: true }
+            cover_url: { type: string, nullable: true }
+            url: { type: string, nullable: true }
+        message:
+          type: string
+          description: ข้อความอธิบาย (มีเมื่อไม่พบข้อมูลหรือใช้ fallback)
+        fallback_reason:
+          type: string
+          description: สาเหตุที่ใช้ fallback (มีเฉพาะ source = fallback)
+          example: timeout (>3000ms)
