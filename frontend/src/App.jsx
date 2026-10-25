@@ -1,8 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-const BOOK_API = "http://localhost:3000";
-const CIRCULATION_API = "http://localhost:3001";
+// อ่าน API URLs จาก Environment Variables ของ Vite
+function getApiUrl(value, name) {
+  const url = value?.trim();
+
+  if (!url) {
+    throw new Error(
+      `ไม่พบ ${name} กรุณาตั้งค่าในไฟล์ frontend/.env.local แล้วเริ่ม Vite ใหม่`,
+    );
+  }
+
+  return url.replace(/\/+$/, "");
+}
+
+const BOOK_API = getApiUrl(
+  import.meta.env.VITE_BOOK_API_URL,
+  "VITE_BOOK_API_URL",
+);
+
+const CIRCULATION_API = getApiUrl(
+  import.meta.env.VITE_CIRCULATION_API_URL,
+  "VITE_CIRCULATION_API_URL",
+);
 
 const VALID_TABS = ["books", "members", "borrow", "history"];
 
@@ -40,16 +60,16 @@ function App() {
     due_date: "",
   });
 
-  // จำหน้าที่เปิดล่าสุด เพื่อให้รีเฟรชแล้วไม่กลับไปหน้าหนังสือ
+  // จำหน้าที่เปิดล่าสุด
   useEffect(() => {
     try {
       localStorage.setItem("library_active_tab", tab);
     } catch {
-      // หากเบราว์เซอร์ปิดการใช้งาน localStorage ให้เว็บทำงานต่อได้
+      // เว็บยังทำงานต่อได้หากใช้ localStorage ไม่ได้
     }
   }, [tab]);
 
-  // แสดงข้อความสถานะและซ่อนอัตโนมัติภายใน 3 วินาที
+  // แสดงข้อความสถานะเป็นเวลา 3 วินาที
   function showStatus(type, text) {
     if (statusTimerRef.current) {
       clearTimeout(statusTimerRef.current);
@@ -79,20 +99,31 @@ function App() {
     };
   }, []);
 
+  // ฟังก์ชันกลางสำหรับเรียก API
   async function request(url, options = {}) {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
+    let response;
+
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...options.headers,
+        },
+      });
+    } catch {
+      throw new Error(
+        "ไม่สามารถเชื่อมต่อ API ได้ กรุณาตรวจสอบว่า Backend ทำงานอยู่และ URL ถูกต้อง",
+      );
+    }
 
     const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       throw new Error(
-        result.error || result.message || `HTTP ${response.status}`,
+        result.error ||
+          result.message ||
+          `API ตอบกลับด้วย HTTP ${response.status}`,
       );
     }
 
@@ -135,13 +166,13 @@ function App() {
     }
 
     const result = await request(
-      `${CIRCULATION_API}/api/members/${memberId}/loans`,
+      `${CIRCULATION_API}/api/members/${encodeURIComponent(memberId)}/loans`,
     );
 
     setLoans(Array.isArray(result.data) ? result.data : []);
   }
 
-  // โหลดข้อมูลทั้งหมด
+  // โหลดข้อมูลหนังสือและสมาชิก
   async function refreshData() {
     setLoading(true);
 
@@ -243,14 +274,17 @@ function App() {
     setMessage("");
 
     try {
-      await request(`${CIRCULATION_API}/api/members/${editingMemberId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          name: memberForm.name.trim(),
-          email: memberForm.email.trim(),
-          phone: memberForm.phone.trim() || null,
-        }),
-      });
+      await request(
+        `${CIRCULATION_API}/api/members/${encodeURIComponent(editingMemberId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: memberForm.name.trim(),
+            email: memberForm.email.trim(),
+            phone: memberForm.phone.trim() || null,
+          }),
+        },
+      );
 
       resetMemberForm();
       await loadMembers();
@@ -280,9 +314,10 @@ function App() {
     setMessage("");
 
     try {
-      await request(`${CIRCULATION_API}/api/members/${member.member_id}`, {
-        method: "DELETE",
-      });
+      await request(
+        `${CIRCULATION_API}/api/members/${encodeURIComponent(member.member_id)}`,
+        { method: "DELETE" },
+      );
 
       if (String(selectedMemberId) === String(member.member_id)) {
         setSelectedMemberId("");
@@ -320,6 +355,10 @@ function App() {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
+
+      if (!loanForm.book_id || !loanForm.member_id || !loanForm.due_date) {
+        throw new Error("กรุณากรอกข้อมูลการยืมให้ครบถ้วน");
+      }
 
       if (loanForm.due_date < today) {
         throw new Error("วันกำหนดคืนต้องไม่เป็นวันที่ผ่านมาแล้ว");
@@ -389,9 +428,10 @@ function App() {
     setMessage("");
 
     try {
-      await request(`${CIRCULATION_API}/api/loans/${loanId}/return`, {
-        method: "PUT",
-      });
+      await request(
+        `${CIRCULATION_API}/api/loans/${encodeURIComponent(loanId)}/return`,
+        { method: "PUT" },
+      );
 
       const refreshed = await refreshData();
 
