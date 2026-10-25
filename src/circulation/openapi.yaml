@@ -1,0 +1,916 @@
+openapi: 3.0.3
+
+info:
+  title: Library Book System API
+  version: 1.1.0
+  description: |
+    OpenAPI Specification สำหรับระบบ Library Book System
+    ครอบคลุม Book API และ Circulation Service
+
+servers:
+  - url: http://localhost:3000
+    description: Local Book API
+
+tags:
+  - name: Books
+    description: จัดการหนังสือ
+  - name: Authors
+    description: จัดการผู้แต่ง
+  - name: Categories
+    description: จัดการหมวดหมู่หนังสือ
+  - name: Health
+    description: ตรวจสอบสถานะ Circulation Service
+  - name: Members
+    description: จัดการสมาชิก
+  - name: Loans
+    description: จัดการการยืมและคืนหนังสือ
+
+paths:
+  /api/books:
+    get:
+      tags: [Books]
+      summary: ดูรายการหนังสือและค้นหาหนังสือ
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: ค้นหาจากชื่อหนังสือหรือชื่อผู้แต่ง
+          schema:
+            type: string
+      responses:
+        '200':
+          description: รายการหนังสือ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookListResponse'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+    post:
+      tags: [Books]
+      summary: เพิ่มหนังสือ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookInput'
+      responses:
+        '201':
+          description: เพิ่มหนังสือสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetailResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/books/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+
+    get:
+      tags: [Books]
+      summary: ดูรายละเอียดหนังสือ
+      responses:
+        '200':
+          description: รายละเอียดหนังสือ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetailResponse'
+        '404':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+    put:
+      tags: [Books]
+      summary: แก้ไขหนังสือ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookInput'
+      responses:
+        '200':
+          description: แก้ไขหนังสือสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetailResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '404':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+    delete:
+      tags: [Books]
+      summary: ลบหนังสือ
+      responses:
+        '200':
+          description: ลบหนังสือสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedBookResponse'
+        '404':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/books/{id}/external-info:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Books]
+      summary: ค้นหาข้อมูลเพิ่มเติมจาก Open Library
+      responses:
+        '200':
+          description: รายละเอียดหนังสือพร้อมข้อมูลภายนอก
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalInfoResponse'
+        '404':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/authors:
+    get:
+      tags: [Authors]
+      summary: ดูรายการผู้แต่ง
+      responses:
+        '200':
+          description: รายการผู้แต่ง
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorListResponse'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+    post:
+      tags: [Authors]
+      summary: เพิ่มผู้แต่ง
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorInput'
+      responses:
+        '201':
+          description: เพิ่มผู้แต่งสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/authors/{id}/books:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Authors]
+      summary: ดูหนังสือของผู้แต่ง
+      responses:
+        '200':
+          description: ข้อมูลผู้แต่งและหนังสือ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorBooksResponse'
+        '404':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: ดูรายการหมวดหมู่
+      responses:
+        '200':
+          description: รายการหมวดหมู่
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+    post:
+      tags: [Categories]
+      summary: เพิ่มหมวดหมู่
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInput'
+      responses:
+        '201':
+          description: เพิ่มหมวดหมู่สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /health:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    get:
+      tags: [Health]
+      summary: ตรวจสอบสถานะ Circulation Service
+      responses:
+        '200':
+          description: Service ทำงานปกติ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/members:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+
+    get:
+      tags: [Members]
+      summary: ดูรายชื่อสมาชิก
+      responses:
+        '200':
+          description: รายชื่อสมาชิก
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListResponse'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+    post:
+      tags: [Members]
+      summary: เพิ่มสมาชิก
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '201':
+          description: เพิ่มสมาชิกสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberCreatedResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '409':
+          $ref: '#/components/responses/CirculationError'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+  /api/members/{id}:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    parameters:
+      - $ref: '#/components/parameters/Id'
+
+    put:
+      tags: [Members]
+      summary: แก้ไขข้อมูลสมาชิก
+      description: แก้ไขชื่อ อีเมล และเบอร์โทรศัพท์ของสมาชิก
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInput'
+      responses:
+        '200':
+          description: แก้ไขข้อมูลสมาชิกสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberUpdatedResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '404':
+          $ref: '#/components/responses/CirculationError'
+        '409':
+          $ref: '#/components/responses/CirculationError'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+    delete:
+      tags: [Members]
+      summary: ลบสมาชิก
+      description: ลบสมาชิกที่ไม่มีข้อจำกัดจากประวัติการยืม
+      responses:
+        '200':
+          description: ลบสมาชิกสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDeletedResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '404':
+          $ref: '#/components/responses/CirculationError'
+        '409':
+          description: ไม่สามารถลบสมาชิกที่มีประวัติการยืมได้
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CirculationErrorResponse'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+  /api/members/{id}/loans:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Members]
+      summary: ดูประวัติการยืมของสมาชิก
+      responses:
+        '200':
+          description: ประวัติการยืมของสมาชิก
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLoansResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '404':
+          $ref: '#/components/responses/CirculationError'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+  /api/loans/overdue:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    get:
+      tags: [Loans]
+      summary: ดูรายการยืมเกินกำหนด
+      responses:
+        '200':
+          description: รายการยืมเกินกำหนดและยังไม่คืน
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverdueLoansResponse'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+  /api/loans:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    post:
+      tags: [Loans]
+      summary: ยืมหนังสือ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanInput'
+      responses:
+        '201':
+          description: ยืมหนังสือสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanCreatedResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '404':
+          $ref: '#/components/responses/CirculationError'
+        '409':
+          $ref: '#/components/responses/CirculationError'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+  /api/loans/{id}/return:
+    servers:
+      - url: http://localhost:3001
+        description: Local Circulation Service
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Loans]
+      summary: คืนหนังสือ
+      responses:
+        '200':
+          description: คืนหนังสือสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanReturnedResponse'
+        '400':
+          $ref: '#/components/responses/CirculationError'
+        '404':
+          $ref: '#/components/responses/CirculationError'
+        '409':
+          $ref: '#/components/responses/CirculationError'
+        '500':
+          $ref: '#/components/responses/CirculationError'
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: รหัสรายการ ต้องเป็นจำนวนเต็มบวก
+      schema:
+        type: integer
+        minimum: 1
+
+  responses:
+    BookError:
+      description: คำขอไม่สำเร็จหรือข้อมูลไม่ถูกต้องจาก Book API
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BookErrorResponse'
+
+    BookInternalServerError:
+      description: เกิดข้อผิดพลาดภายใน Book API
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BookErrorResponse'
+
+    CirculationError:
+      description: คำขอไม่สำเร็จหรือเกิดข้อผิดพลาดจาก Circulation Service
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CirculationErrorResponse'
+
+  schemas:
+    BookErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: ไม่พบข้อมูล
+      required: [success, message]
+
+    CirculationErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: ไม่สามารถดึงข้อมูลสมาชิกได้
+
+    HealthResponse:
+      type: object
+      required: [service, status]
+      properties:
+        service:
+          type: string
+          example: circulation-service
+        status:
+          type: string
+          example: ok
+
+    Book:
+      type: object
+      properties:
+        book_id:
+          type: integer
+        title:
+          type: string
+        isbn:
+          type: string
+        published_year:
+          type: integer
+          nullable: true
+        price:
+          type: number
+          format: float
+        total_copies:
+          type: integer
+        available_copies:
+          type: integer
+        author_id:
+          type: integer
+        author_name:
+          type: string
+
+    Category:
+      type: object
+      properties:
+        category_id:
+          type: integer
+        name:
+          type: string
+
+    BookDetail:
+      allOf:
+        - $ref: '#/components/schemas/Book'
+        - type: object
+          properties:
+            nationality:
+              type: string
+              nullable: true
+            categories:
+              type: array
+              items:
+                $ref: '#/components/schemas/Category'
+
+    BookInput:
+      type: object
+      required: [title, isbn, author_id]
+      properties:
+        title:
+          type: string
+        isbn:
+          type: string
+        author_id:
+          type: integer
+        published_year:
+          type: integer
+          nullable: true
+        price:
+          type: number
+          minimum: 0
+          default: 0
+        category_ids:
+          type: array
+          items:
+            type: integer
+
+    BookListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+
+    BookDetailResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BookDetail'
+
+    DeletedBookResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [deleted_book_id]
+          properties:
+            deleted_book_id:
+              type: integer
+
+    ExternalInfoResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          description: รายละเอียดหนังสือพร้อมข้อมูลจาก Open Library
+          additionalProperties: true
+
+    Author:
+      type: object
+      properties:
+        author_id:
+          type: integer
+        name:
+          type: string
+        nationality:
+          type: string
+          nullable: true
+        birth_year:
+          type: integer
+          nullable: true
+
+    AuthorInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        nationality:
+          type: string
+          nullable: true
+        birth_year:
+          type: integer
+          nullable: true
+
+    AuthorListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Author'
+
+    AuthorResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Author'
+
+    AuthorBooksResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [author, books]
+          properties:
+            author:
+              type: object
+              required: [author_id, name]
+              properties:
+                author_id:
+                  type: integer
+                name:
+                  type: string
+            books:
+              type: array
+              items:
+                $ref: '#/components/schemas/Book'
+
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    CategoryListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+
+    CategoryResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Category'
+
+    MemberInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          example: New Member
+        email:
+          type: string
+          format: email
+          example: newmember@example.com
+        phone:
+          type: string
+          nullable: true
+          example: '0812345678'
+
+    Member:
+      type: object
+      properties:
+        member_id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+
+    MemberListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+
+    MemberCreatedResponse:
+      type: object
+      required: [message, member_id]
+      properties:
+        message:
+          type: string
+          example: เพิ่มสมาชิกสำเร็จ
+        member_id:
+          type: integer
+          example: 1
+
+    MemberUpdatedResponse:
+      type: object
+      required: [message, data]
+      properties:
+        message:
+          type: string
+          example: แก้ไขข้อมูลสมาชิกสำเร็จ
+        data:
+          $ref: '#/components/schemas/Member'
+
+    MemberDeletedResponse:
+      type: object
+      required: [message, member_id]
+      properties:
+        message:
+          type: string
+          example: ลบสมาชิกสำเร็จ
+        member_id:
+          type: integer
+          example: 1
+
+    MemberLoansResponse:
+      type: object
+      required: [member, data]
+      properties:
+        member:
+          type: object
+          required: [member_id, name]
+          properties:
+            member_id:
+              type: integer
+            name:
+              type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberLoan'
+
+    MemberLoan:
+      type: object
+      properties:
+        loan_id:
+          type: integer
+        book_id:
+          type: integer
+        title:
+          type: string
+        loan_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        return_date:
+          type: string
+          format: date
+          nullable: true
+
+    OverdueLoansResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverdueLoan'
+
+    OverdueLoan:
+      type: object
+      properties:
+        loan_id:
+          type: integer
+        member_id:
+          type: integer
+        member_name:
+          type: string
+        book_id:
+          type: integer
+        title:
+          type: string
+        loan_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+
+    LoanInput:
+      type: object
+      required: [book_id, member_id, due_date]
+      properties:
+        book_id:
+          type: integer
+          minimum: 1
+          example: 3
+        member_id:
+          type: integer
+          minimum: 1
+          example: 1
+        loan_date:
+          type: string
+          format: date
+          description: วันที่ยืม หากไม่ระบุจะใช้วันที่ปัจจุบัน
+          example: '2026-10-25'
+        due_date:
+          type: string
+          format: date
+          example: '2026-11-01'
+
+    LoanCreatedResponse:
+      type: object
+      required: [message, loan_id, book_id, member_id, loan_date, due_date]
+      properties:
+        message:
+          type: string
+          example: ยืมหนังสือสำเร็จ
+        loan_id:
+          type: integer
+        book_id:
+          type: integer
+        member_id:
+          type: integer
+        loan_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+
+    LoanReturnedResponse:
+      type: object
+      required: [message, loan_id]
+      properties:
+        message:
+          type: string
+          example: คืนหนังสือสำเร็จ
+        loan_id:
+          type: integer

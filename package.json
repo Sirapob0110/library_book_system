@@ -4,14 +4,24 @@
   "description": "ระบบข้อมูลหนังสือ - โครงงานระยะที่ 2 (OpenAPI/Swagger + External API Integration)",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "start:circulation": "node src/circulation/index.js",
+    "test": "jest --coverage --runInBand"
   },
   "dependencies": {
     "axios": "^1.7.2",
-    "dotenv": "^16.4.5",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "helmet": "^8.3.0",
+    "morgan": "^1.12.1",
     "mysql2": "^3.10.0",
     "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.1",
     "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1"
   }
 }

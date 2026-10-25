@@ -1,213 +1,494 @@
-// src/index.js - Express API ระบบข้อมูลหนังสือ + Swagger UI ที่ /api-docs
-require('dotenv').config();
-const path = require('path');
-const express = require('express');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-
-const pool = require('./db');
-const { lookupBookByIsbn } = require('./services/external-api');
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const path = require("path");
+const fs = require("fs");
+const YAML = require("yaml");
+const swaggerUi = require("swagger-ui-express");
+const db = require("../db");
 
 const app = express();
+const PORT = Number(process.env.CIRCULATION_PORT) || 3001;
+
+app.use(helmet());
+app.use(cors());
 app.use(express.json());
+app.use(morgan("dev"));
 
-// ---------- Swagger UI (อ่านจาก openapi.yaml ไฟล์เดียวกับที่ส่ง) ----------
-const openapiDoc = YAML.load(path.join(__dirname, '..', 'openapi.yaml'));
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiDoc));
+// Swagger UI
+const swaggerDocument = YAML.parse(
+  fs.readFileSync(path.join(__dirname, "openapi.yaml"), "utf8"),
+);
 
-// ---------- Helpers ----------
-const ok = (res, data, status = 200) => res.status(status).json({ success: true, data });
-const fail = (res, status, message) => res.status(status).json({ success: false, message });
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-function handleDbError(res, err) {
-  if (err.code === 'ER_DUP_ENTRY') return fail(res, 409, 'ข้อมูลซ้ำ (เช่น ISBN หรือชื่อหมวดหมู่มีอยู่แล้ว)');
-  if (err.code === 'ER_NO_REFERENCED_ROW_2') return fail(res, 400, 'author_id หรือ category_ids ที่ระบุไม่มีอยู่ในระบบ');
-  console.error(err);
-  return fail(res, 500, 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์');
-}
+// Health check
+app.get("/health", (req, res) => {
+  res.json({
+    service: "circulation-service",
+    status: "ok",
+  });
+});
 
-function validateBook(body) {
-  const { title, isbn, author_id, published_year, price } = body || {};
-  if (!title || typeof title !== 'string') return 'title จำเป็นต้องระบุ';
-  if (!isbn || typeof isbn !== 'string') return 'isbn จำเป็นต้องระบุ';
-  if (!Number.isInteger(author_id)) return 'author_id ต้องเป็นจำนวนเต็ม';
-  if (published_year !== undefined && published_year !== null && !Number.isInteger(published_year)) return 'published_year ต้องเป็นจำนวนเต็ม';
-  if (price !== undefined && (typeof price !== 'number' || price < 0)) return 'price ต้องเป็นตัวเลขที่ไม่ติดลบ';
-  if (body.category_ids !== undefined && !(Array.isArray(body.category_ids) && body.category_ids.every(Number.isInteger))) {
-    return 'category_ids ต้องเป็นอาร์เรย์ของจำนวนเต็ม';
+// ดึงรายชื่อสมาชิก
+app.get("/api/members", async (req, res) => {
+  try {
+    const [members] = await db.query(
+      `SELECT member_id, name, email, phone
+       FROM members
+       ORDER BY member_id DESC`,
+    );
+
+    return res.json({ data: members });
+  } catch (error) {
+    console.error("Get members error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถดึงข้อมูลสมาชิกได้",
+    });
   }
-  return null;
-}
-
-async function getBookDetail(id) {
-  const [rows] = await pool.query(
-    `SELECT b.book_id, b.title, b.isbn, b.published_year, b.price,
-            a.author_id, a.name AS author_name, a.nationality
-     FROM books b JOIN authors a ON b.author_id = a.author_id
-     WHERE b.book_id = ?`, [id]);
-  if (rows.length === 0) return null;
-  const [cats] = await pool.query(
-    `SELECT c.category_id, c.name
-     FROM book_categories bc JOIN categories c ON bc.category_id = c.category_id
-     WHERE bc.book_id = ? ORDER BY c.category_id`, [id]);
-  return { ...rows[0], categories: cats };
-}
-
-// ---------- Books ----------
-// 1) รายการหนังสือ (ค้นหาด้วย ?q= ชื่อเรื่องหรือชื่อผู้แต่ง)
-app.get('/api/books', async (req, res) => {
-  try {
-    const q = req.query.q ? `%${req.query.q}%` : null;
-    const sql = `SELECT b.book_id, b.title, b.isbn, b.published_year, b.price,
-                        a.author_id, a.name AS author_name
-                 FROM books b JOIN authors a ON b.author_id = a.author_id
-                 ${q ? 'WHERE b.title LIKE ? OR a.name LIKE ?' : ''}
-                 ORDER BY b.book_id`;
-    const [rows] = await pool.query(sql, q ? [q, q] : []);
-    ok(res, rows);
-  } catch (err) { handleDbError(res, err); }
 });
 
-// 2) รายละเอียดหนังสือ
-app.get('/api/books/:id', async (req, res) => {
-  try {
-    const book = await getBookDetail(req.params.id);
-    if (!book) return fail(res, 404, 'ไม่พบหนังสือเล่มนี้');
-    ok(res, book);
-  } catch (err) { handleDbError(res, err); }
-});
+// เพิ่มสมาชิก
+app.post("/api/members", async (req, res) => {
+  const { name, email, phone } = req.body;
 
-// 3) เพิ่มหนังสือ (transaction)
-app.post('/api/books', async (req, res) => {
-  const error = validateBook(req.body);
-  if (error) return fail(res, 400, error);
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof email !== "string" ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  ) {
+    return res.status(400).json({
+      error: "กรุณาระบุชื่อและอีเมลให้ถูกต้อง",
+    });
+  }
 
-  const { title, isbn, author_id, published_year, price, category_ids } = req.body;
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
-    const [result] = await conn.query(
-      `INSERT INTO books (title, isbn, author_id, published_year, price) VALUES (?, ?, ?, ?, ?)`,
-      [title, isbn, author_id, published_year ?? null, price ?? 0]);
-    if (category_ids && category_ids.length) {
-      await conn.query(`INSERT INTO book_categories (book_id, category_id) VALUES ?`,
-        [category_ids.map((c) => [result.insertId, c])]);
+    const [result] = await db.query(
+      `INSERT INTO members (name, email, phone)
+       VALUES (?, ?, ?)`,
+      [
+        name.trim(),
+        email.trim(),
+        typeof phone === "string" ? phone.trim() || null : null,
+      ],
+    );
+
+    return res.status(201).json({
+      message: "เพิ่มสมาชิกสำเร็จ",
+      member_id: result.insertId,
+    });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: "อีเมลนี้มีผู้ใช้งานแล้ว",
+      });
     }
-    await conn.commit();
-    ok(res, await getBookDetail(result.insertId), 201);
-  } catch (err) {
-    await conn.rollback();
-    handleDbError(res, err);
-  } finally { conn.release(); }
+
+    console.error("Create member error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถเพิ่มสมาชิกได้",
+    });
+  }
 });
 
-// 4) แก้ไขหนังสือ (แทนที่หมวดหมู่ทั้งหมดถ้าส่ง category_ids มา)
-app.put('/api/books/:id', async (req, res) => {
-  const error = validateBook(req.body);
-  if (error) return fail(res, 400, error);
+// แก้ไขข้อมูลสมาชิก
+app.put("/api/members/:id", async (req, res) => {
+  const memberId = Number(req.params.id);
+  const { name, email, phone } = req.body;
 
-  const { title, isbn, author_id, published_year, price, category_ids } = req.body;
-  const conn = await pool.getConnection();
+  if (!Number.isInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({
+      error: "รหัสสมาชิกไม่ถูกต้อง",
+    });
+  }
+
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof email !== "string" ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  ) {
+    return res.status(400).json({
+      error: "กรุณาระบุชื่อและอีเมลให้ถูกต้อง",
+    });
+  }
+
   try {
-    await conn.beginTransaction();
-    const [result] = await conn.query(
-      `UPDATE books SET title = ?, isbn = ?, author_id = ?, published_year = ?, price = ? WHERE book_id = ?`,
-      [title, isbn, author_id, published_year ?? null, price ?? 0, req.params.id]);
+    const [existing] = await db.query(
+      "SELECT member_id FROM members WHERE member_id = ?",
+      [memberId],
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        error: "ไม่พบสมาชิก",
+      });
+    }
+
+    await db.query(
+      `UPDATE members
+       SET name = ?, email = ?, phone = ?
+       WHERE member_id = ?`,
+      [
+        name.trim(),
+        email.trim(),
+        typeof phone === "string" ? phone.trim() || null : null,
+        memberId,
+      ],
+    );
+
+    const [rows] = await db.query(
+      `SELECT member_id, name, email, phone
+       FROM members
+       WHERE member_id = ?`,
+      [memberId],
+    );
+
+    return res.status(200).json({
+      message: "แก้ไขข้อมูลสมาชิกสำเร็จ",
+      data: rows[0],
+    });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: "อีเมลนี้มีผู้ใช้งานแล้ว",
+      });
+    }
+
+    console.error("Update member error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถแก้ไขข้อมูลสมาชิกได้",
+    });
+  }
+});
+
+// ลบสมาชิก
+app.delete("/api/members/:id", async (req, res) => {
+  const memberId = Number(req.params.id);
+
+  if (!Number.isInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({
+      error: "รหัสสมาชิกไม่ถูกต้อง",
+    });
+  }
+
+  try {
+    const [result] = await db.query("DELETE FROM members WHERE member_id = ?", [
+      memberId,
+    ]);
+
     if (result.affectedRows === 0) {
-      await conn.rollback();
-      return fail(res, 404, 'ไม่พบหนังสือเล่มนี้');
+      return res.status(404).json({
+        error: "ไม่พบสมาชิก",
+      });
     }
-    if (category_ids !== undefined) {
-      await conn.query(`DELETE FROM book_categories WHERE book_id = ?`, [req.params.id]);
-      if (category_ids.length) {
-        await conn.query(`INSERT INTO book_categories (book_id, category_id) VALUES ?`,
-          [category_ids.map((c) => [Number(req.params.id), c])]);
+
+    return res.status(200).json({
+      message: "ลบสมาชิกสำเร็จ",
+      member_id: memberId,
+    });
+  } catch (error) {
+    if (
+      error.code === "ER_ROW_IS_REFERENCED_2" ||
+      error.code === "ER_ROW_IS_REFERENCED"
+    ) {
+      return res.status(409).json({
+        error: "ไม่สามารถลบสมาชิกที่มีประวัติการยืมได้",
+      });
+    }
+
+    console.error("Delete member error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถลบสมาชิกได้",
+    });
+  }
+});
+
+// ดูประวัติการยืมของสมาชิก
+app.get("/api/members/:id/loans", async (req, res) => {
+  const memberId = Number(req.params.id);
+
+  if (!Number.isInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({
+      error: "รหัสสมาชิกไม่ถูกต้อง",
+    });
+  }
+
+  try {
+    const [members] = await db.query(
+      "SELECT member_id, name FROM members WHERE member_id = ?",
+      [memberId],
+    );
+
+    if (members.length === 0) {
+      return res.status(404).json({
+        error: "ไม่พบสมาชิก",
+      });
+    }
+
+    const [loans] = await db.query(
+      `SELECT
+         l.loan_id,
+         l.book_id,
+         b.title,
+         l.loan_date,
+         l.due_date,
+         l.return_date
+       FROM loans l
+       JOIN books b ON b.book_id = l.book_id
+       WHERE l.member_id = ?
+       ORDER BY l.loan_id DESC`,
+      [memberId],
+    );
+
+    return res.json({
+      member: members[0],
+      data: loans,
+    });
+  } catch (error) {
+    console.error("Get member loans error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถดึงประวัติการยืมได้",
+    });
+  }
+});
+
+// ดูรายการยืมเกินกำหนดที่ยังไม่ได้คืน
+app.get("/api/loans/overdue", async (req, res) => {
+  try {
+    const [loans] = await db.query(
+      `SELECT
+         l.loan_id,
+         l.member_id,
+         m.name AS member_name,
+         l.book_id,
+         b.title,
+         l.loan_date,
+         l.due_date
+       FROM loans l
+       JOIN members m ON m.member_id = l.member_id
+       JOIN books b ON b.book_id = l.book_id
+       WHERE l.due_date < CURDATE()
+         AND l.return_date IS NULL
+       ORDER BY l.due_date ASC`,
+    );
+
+    return res.json({ data: loans });
+  } catch (error) {
+    console.error("Get overdue loans error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถดึงรายการยืมเกินกำหนดได้",
+    });
+  }
+});
+
+// ตรวจสอบรูปแบบวันที่ YYYY-MM-DD
+const validDate = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00Z`);
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+};
+
+// ยืมหนังสือ
+app.post("/api/loans", async (req, res) => {
+  const { book_id, member_id, loan_date, due_date } = req.body;
+
+  const bookId = Number(book_id);
+  const memberId = Number(member_id);
+  const today = new Date().toISOString().slice(0, 10);
+  const loanDate = loan_date || today;
+
+  if (
+    !Number.isInteger(bookId) ||
+    bookId <= 0 ||
+    !Number.isInteger(memberId) ||
+    memberId <= 0 ||
+    typeof due_date !== "string" ||
+    !due_date
+  ) {
+    return res.status(400).json({
+      error: "กรุณาระบุ book_id, member_id และ due_date ให้ถูกต้อง",
+    });
+  }
+
+  if (!validDate(loanDate) || !validDate(due_date) || due_date < loanDate) {
+    return res.status(400).json({
+      error: "วันที่ยืมและวันกำหนดคืนไม่ถูกต้อง",
+    });
+  }
+
+  let connection;
+
+  try {
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [members] = await connection.query(
+      "SELECT member_id FROM members WHERE member_id = ?",
+      [memberId],
+    );
+
+    if (members.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        error: "ไม่พบสมาชิก",
+      });
+    }
+
+    const [books] = await connection.query(
+      `SELECT book_id, total_copies, available_copies
+       FROM books
+       WHERE book_id = ?
+       FOR UPDATE`,
+      [bookId],
+    );
+
+    if (books.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        error: "ไม่พบหนังสือ",
+      });
+    }
+
+    if (books[0].available_copies <= 0) {
+      await connection.rollback();
+      return res.status(409).json({
+        error: "หนังสือหมด ไม่มีเล่มให้ยืม",
+      });
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO loans (book_id, member_id, loan_date, due_date)
+       VALUES (?, ?, ?, ?)`,
+      [bookId, memberId, loanDate, due_date],
+    );
+
+    await connection.query(
+      `UPDATE books
+       SET available_copies = available_copies - 1
+       WHERE book_id = ?`,
+      [bookId],
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: "ยืมหนังสือสำเร็จ",
+      loan_id: result.insertId,
+      book_id: bookId,
+      member_id: memberId,
+      loan_date: loanDate,
+      due_date,
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Create loan rollback error:", rollbackError);
       }
     }
-    await conn.commit();
-    ok(res, await getBookDetail(req.params.id));
-  } catch (err) {
-    await conn.rollback();
-    handleDbError(res, err);
-  } finally { conn.release(); }
+
+    console.error("Create loan error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถทำรายการยืมหนังสือได้",
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 });
 
-// 5) ลบหนังสือ
-app.delete('/api/books/:id', async (req, res) => {
+// คืนหนังสือ
+app.put("/api/loans/:id/return", async (req, res) => {
+  const loanId = Number(req.params.id);
+
+  if (!Number.isInteger(loanId) || loanId <= 0) {
+    return res.status(400).json({
+      error: "รหัสรายการยืมไม่ถูกต้อง",
+    });
+  }
+
+  let connection;
+
   try {
-    const [result] = await pool.query('DELETE FROM books WHERE book_id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return fail(res, 404, 'ไม่พบหนังสือเล่มนี้');
-    ok(res, { deleted_book_id: Number(req.params.id) });
-  } catch (err) { handleDbError(res, err); }
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [loans] = await connection.query(
+      `SELECT loan_id, book_id, return_date
+       FROM loans
+       WHERE loan_id = ?
+       FOR UPDATE`,
+      [loanId],
+    );
+
+    if (loans.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        error: "ไม่พบรายการยืม",
+      });
+    }
+
+    if (loans[0].return_date) {
+      await connection.rollback();
+      return res.status(409).json({
+        error: "หนังสือรายการนี้ถูกคืนแล้ว",
+      });
+    }
+
+    await connection.query(
+      "UPDATE loans SET return_date = CURDATE() WHERE loan_id = ?",
+      [loanId],
+    );
+
+    await connection.query(
+      `UPDATE books
+       SET available_copies = LEAST(total_copies, available_copies + 1)
+       WHERE book_id = ?`,
+      [loans[0].book_id],
+    );
+
+    await connection.commit();
+
+    return res.status(200).json({
+      message: "คืนหนังสือสำเร็จ",
+      loan_id: loanId,
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Return loan rollback error:", rollbackError);
+      }
+    }
+
+    console.error("Return loan error:", error);
+    return res.status(500).json({
+      error: "ไม่สามารถคืนหนังสือได้",
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 });
 
-// 6) ข้อมูลเพิ่มเติมจาก API ภายนอก (Open Library) — มี retry/timeout/fallback
-app.get('/api/books/:id/external-info', async (req, res) => {
-  try {
-    const book = await getBookDetail(req.params.id);
-    if (!book) return fail(res, 404, 'ไม่พบหนังสือเล่มนี้');
-    const info = await lookupBookByIsbn(book.isbn);
-    // ตอบ 200 เสมอ แม้ใช้ fallback: ผู้ใช้ยังได้ข้อมูลในระบบ (degraded response)
-    ok(res, { book, ...info });
-  } catch (err) { handleDbError(res, err); }
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Circulation Service running on port ${PORT}`);
+  });
+}
 
-// ---------- Authors ----------
-// 7) รายการผู้แต่ง
-app.get('/api/authors', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT author_id, name, nationality, birth_year FROM authors ORDER BY name');
-    ok(res, rows);
-  } catch (err) { handleDbError(res, err); }
-});
-
-// 8) เพิ่มผู้แต่ง
-app.post('/api/authors', async (req, res) => {
-  const { name, nationality, birth_year } = req.body || {};
-  if (!name || typeof name !== 'string') return fail(res, 400, 'name จำเป็นต้องระบุ');
-  if (birth_year !== undefined && birth_year !== null && !Number.isInteger(birth_year)) return fail(res, 400, 'birth_year ต้องเป็นจำนวนเต็ม');
-  try {
-    const [result] = await pool.query(
-      'INSERT INTO authors (name, nationality, birth_year) VALUES (?, ?, ?)',
-      [name, nationality ?? null, birth_year ?? null]);
-    ok(res, { author_id: result.insertId, name, nationality: nationality ?? null, birth_year: birth_year ?? null }, 201);
-  } catch (err) { handleDbError(res, err); }
-});
-
-// 9) หนังสือทั้งหมดของผู้แต่งคนหนึ่ง
-app.get('/api/authors/:id/books', async (req, res) => {
-  try {
-    const [authors] = await pool.query('SELECT author_id, name FROM authors WHERE author_id = ?', [req.params.id]);
-    if (authors.length === 0) return fail(res, 404, 'ไม่พบผู้แต่งคนนี้');
-    const [books] = await pool.query(
-      'SELECT book_id, title, isbn, published_year, price FROM books WHERE author_id = ? ORDER BY published_year',
-      [req.params.id]);
-    ok(res, { author: authors[0], books });
-  } catch (err) { handleDbError(res, err); }
-});
-
-// ---------- Categories ----------
-// 10) รายการหมวดหมู่
-app.get('/api/categories', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT category_id, name FROM categories ORDER BY name');
-    ok(res, rows);
-  } catch (err) { handleDbError(res, err); }
-});
-
-// 11) เพิ่มหมวดหมู่
-app.post('/api/categories', async (req, res) => {
-  const { name } = req.body || {};
-  if (!name || typeof name !== 'string') return fail(res, 400, 'name จำเป็นต้องระบุ');
-  try {
-    const [result] = await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
-    ok(res, { category_id: result.insertId, name }, 201);
-  } catch (err) { handleDbError(res, err); }
-});
-
-// ---------- Start ----------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Book API: http://localhost:${PORT}`);
-  console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
-});
+module.exports = app;
