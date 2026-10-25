@@ -46,7 +46,6 @@ paths:
                 $ref: '#/components/schemas/BookListResponse'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
-
     post:
       tags: [Books]
       summary: เพิ่มหนังสือ
@@ -73,7 +72,6 @@ paths:
   /api/books/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
-
     get:
       tags: [Books]
       summary: ดูรายละเอียดหนังสือ
@@ -88,7 +86,6 @@ paths:
           $ref: '#/components/responses/BookError'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
-
     put:
       tags: [Books]
       summary: แก้ไขหนังสือ
@@ -113,7 +110,6 @@ paths:
           $ref: '#/components/responses/BookError'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
-
     delete:
       tags: [Books]
       summary: ลบหนังสือ
@@ -162,7 +158,6 @@ paths:
                 $ref: '#/components/schemas/AuthorListResponse'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
-
     post:
       tags: [Authors]
       summary: เพิ่มผู้แต่ง
@@ -215,7 +210,6 @@ paths:
                 $ref: '#/components/schemas/CategoryListResponse'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
-
     post:
       tags: [Categories]
       summary: เพิ่มหมวดหมู่
@@ -258,7 +252,6 @@ paths:
     servers:
       - url: http://localhost:3001
         description: Local Circulation Service
-
     get:
       tags: [Members]
       summary: ดูรายชื่อสมาชิก
@@ -271,7 +264,6 @@ paths:
                 $ref: '#/components/schemas/MemberListResponse'
         '500':
           $ref: '#/components/responses/CirculationError'
-
     post:
       tags: [Members]
       summary: เพิ่มสมาชิก
@@ -301,7 +293,6 @@ paths:
         description: Local Circulation Service
     parameters:
       - $ref: '#/components/parameters/Id'
-
     put:
       tags: [Members]
       summary: แก้ไขข้อมูลสมาชิก
@@ -327,7 +318,6 @@ paths:
           $ref: '#/components/responses/CirculationError'
         '500':
           $ref: '#/components/responses/CirculationError'
-
     delete:
       tags: [Members]
       summary: ลบสมาชิก
@@ -464,14 +454,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/BookErrorResponse'
-
     BookInternalServerError:
       description: เกิดข้อผิดพลาดภายใน Book API
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/BookErrorResponse'
-
     CirculationError:
       description: คำขอไม่สำเร็จหรือเกิดข้อผิดพลาดจาก Circulation Service
       content:
@@ -482,6 +470,7 @@ components:
   schemas:
     BookErrorResponse:
       type: object
+      required: [success, message]
       properties:
         success:
           type: boolean
@@ -489,7 +478,6 @@ components:
         message:
           type: string
           example: ไม่พบข้อมูล
-      required: [success, message]
 
     CirculationErrorResponse:
       type: object
@@ -510,8 +498,10 @@ components:
           type: string
           example: ok
 
+    # Matches the fields returned by the Book API list query.
     Book:
       type: object
+      required: [book_id, title, isbn, price, author_id, author_name]
       properties:
         book_id:
           type: integer
@@ -525,10 +515,6 @@ components:
         price:
           type: number
           format: float
-        total_copies:
-          type: integer
-        available_copies:
-          type: integer
         author_id:
           type: integer
         author_name:
@@ -622,8 +608,33 @@ components:
           example: true
         data:
           type: object
-          description: รายละเอียดหนังสือพร้อมข้อมูลจาก Open Library
-          additionalProperties: true
+          required: [book, source, found, attempts]
+          properties:
+            book:
+              $ref: '#/components/schemas/BookDetail'
+            source:
+              type: string
+              enum: [open-library, fallback]
+            found:
+              type: boolean
+              description: พบข้อมูลหนังสือจากแหล่งภายนอกหรือไม่
+            attempts:
+              type: integer
+              minimum: 0
+              description: จำนวนครั้งที่เรียก API ภายนอก
+            external:
+              nullable: true
+              description: ข้อมูลจาก Open Library หรือ null เมื่อใช้ fallback
+              oneOf:
+                - type: object
+                  additionalProperties: true
+                - type: string
+            message:
+              type: string
+              description: ข้อความอธิบายผลลัพธ์
+            fallback_reason:
+              type: string
+              description: สาเหตุที่ใช้ fallback
 
     Author:
       type: object
@@ -696,7 +707,24 @@ components:
             books:
               type: array
               items:
-                $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/AuthorBook'
+
+    AuthorBook:
+      type: object
+      required: [book_id, title, isbn, price]
+      properties:
+        book_id:
+          type: integer
+        title:
+          type: string
+        isbn:
+          type: string
+        published_year:
+          type: integer
+          nullable: true
+        price:
+          type: number
+          format: float
 
     CategoryInput:
       type: object
