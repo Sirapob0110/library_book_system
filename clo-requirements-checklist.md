@@ -47,18 +47,18 @@
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| มีชุดทดสอบครอบคลุมทั้งสองบริการ | `tests/books.test.js` (40 tests, describe ที่บรรทัด 15–552) · `src/circulation/circulation.test.js` (29 tests, describe ที่บรรทัด 11–334) | `[x]` รันทดสอบ |
-| ผลทดสอบล่าสุด | Test Suites 2/2 ผ่าน · Tests 69/69 ผ่าน · Statements 90.43% · Branches 82.38% · Functions 88.57% · Lines 90.50% | `[x]` รัน `npm test` ซ้ำเมื่อ 26 ต.ค. 2569 ตัวเลขตรงกับ `coverage-report.md` |
-| ระบุจุดที่ยังไม่มี test | `coverage-report.md` หัวข้อ 6 (บรรทัดที่ไม่ครอบคลุม) และหัวข้อ 5.2 (ไฟล์ที่ไม่ถูกนับ: `db.js`, `external-api.js`, ไฟล์สำรอง) | `[x]` |
-| รายงานสะท้อนสถานะจริง | ตัวเลข 90.43% นับเฉพาะไฟล์ที่ชุดทดสอบเรียกใช้ เมื่อนับทุกไฟล์ใน `src/` (ไม่รวมไฟล์สำรอง) ได้ 78.97% | `[x]` ระบุไว้ใน `coverage-report.md` หัวข้อ 5.2 |
+| มีชุดทดสอบครอบคลุมทั้งสองบริการและโมดูลเรียก API ภายนอก | `tests/books.test.js` (40 tests, describe ที่บรรทัด 15–552) · `src/circulation/circulation.test.js` (29 tests, describe ที่บรรทัด 11–334) · `tests/external-api.test.js` (18 tests: retry, backoff, timeout, fallback) | `[x]` รันทดสอบ |
+| ผลทดสอบล่าสุด | Test Suites 3/3 ผ่าน · Tests 87/87 ผ่าน · Statements 91.28% · Branches 82.75% · Functions 90.69% · Lines 91.21% | `[x]` รัน `npm test` ซ้ำเมื่อ 26 ต.ค. 2569 ตัวเลขตรงกับผลที่รันบนเครื่องผู้จัดทำและ `coverage-report.md` |
+| ระบุจุดที่ยังไม่มี test | `coverage-report.md` หัวข้อ 6 (บรรทัดที่ไม่ครอบคลุม) และหัวข้อ 5.2 (ไฟล์ที่ไม่ถูกนับ: `db.js`) | `[x]` |
+| รายงานสะท้อนสถานะจริง | ตัวเลข 91.28% นับเฉพาะไฟล์ที่ชุดทดสอบเรียกใช้ เมื่อนับทุกไฟล์ใน `src/` ได้ 90.29% (ต่างกันเพราะ `src/db.js` ไม่ถูกทดสอบ) | `[x]` ระบุไว้ใน `coverage-report.md` หัวข้อ 5.2 |
 
 ### 2.4 ข้อจำกัดที่ทราบ
 
 1. ชุดทดสอบทั้งหมด mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง ส่วนนี้ตรวจแยกด้วย `curl` กับฐานข้อมูลที่สร้างจาก `schema.sql`
-2. `src/services/external-api.js` ไม่มี unit test (ถูก mock ในชุดทดสอบ) การทดสอบ retry / timeout / fallback ใช้การทดสอบมือ บันทึกใน `failure-scenario-results.md`
+2. `tests/external-api.test.js` จำลอง axios จึงยืนยันตรรกะ retry / timeout / fallback แต่ไม่ได้เรียก Open Library จริง การเรียกจริงและความล้มเหลวของเครือข่ายจริงทดสอบด้วยมือ บันทึกใน `failure-scenario-results.md` และผู้จัดทำตรวจแล้วว่าเทสต์ล้มเมื่อโค้ดถูกแก้ให้ผิด 5 แบบ (`coverage-report.md` หัวข้อ 4.1)
 3. `microservices-design.md` เป็นการออกแบบเป้าหมาย (มี API Gateway และฐานข้อมูลแยก 3 ชุด) ของที่ทำจริงคือ 2 บริการใช้ฐานข้อมูล `book_system` ร่วมกัน และไม่มี API Gateway เหตุผล: การยืมต้องปรับ `books.available_copies` และเพิ่ม `loans` ใน transaction เดียวกัน (`src/circulation/index.js:393-445`)
 4. `postman_collection.json` ครอบคลุม endpoint ของ Book API เท่านั้น endpoint ของ Circulation Service ทดสอบด้วย Jest, `curl` และหน้าเว็บ
-5. ไฟล์ `src/index.circulation-backup.js` เป็นไฟล์สำรองที่ไม่มีโค้ดส่วนใดเรียกใช้
+5. ยังไม่มีการทดสอบอัตโนมัติของ Frontend และ `src/db.js` ไม่มี unit test
 
 ## 3. CLO6 — Client-Facing Frontend (10 คะแนน)
 
@@ -138,7 +138,7 @@
 | ยืมหนังสือพร้อมกัน 2 คนจะเกิดอะไร | ใช้ transaction กับ `SELECT … FOR UPDATE` (`src/circulation/index.js:393`, `:412`) คนที่สองรอจนคนแรกเสร็จ แล้วเห็นจำนวนล่าสุด ถ้าหมดได้ 409 |
 | ทำไมวันที่ถึงต้องตั้ง `dateStrings` | `mysql2` แปลง `DATE` เป็น `Date` ของ JavaScript ตามเขตเวลา ทำให้เครื่องที่เป็น UTC+7 แสดงวันที่ถอยหลัง 1 วัน (`src/db.js:15`) |
 | ถ้า Open Library ล่มเกิดอะไร | ลอง 3 ครั้ง (รอ 300 ms แล้ว 600 ms) timeout 3 วินาทีต่อครั้ง ไม่ retry เมื่อได้ 4xx แล้วตอบ HTTP 200 พร้อม `source: "fallback"` และข้อมูลหนังสือในระบบ (`src/services/external-api.js`) |
-| Coverage 90% แปลว่าไม่มีบั๊กไหม | ไม่ใช่ แปลว่าโค้ดส่วนนั้นถูกเรียกขณะทดสอบ และชุดทดสอบ mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง ทั้งโครงการ (นับ `db.js` และ `external-api.js`) ได้ 78.97% |
+| Coverage 90% แปลว่าไม่มีบั๊กไหม | ไม่ใช่ แปลว่าโค้ดส่วนนั้นถูกเรียกขณะทดสอบ และชุดทดสอบ mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง เมื่อนับทุกไฟล์ใน `src/` (รวม `db.js` ที่ไม่ถูกทดสอบ) ได้ 90.29% |
 | Swagger/OpenAPI ช่วยอะไร | เป็นสัญญาของ API ที่อ่านโดยคนและเครื่อง Swagger UI อ่านจากไฟล์ `openapi.yaml` เดียวกัน ทดลองเรียกได้ทันที |
 
 ## 5. ขั้นตอนตรวจก่อนส่ง
@@ -167,19 +167,19 @@ cd frontend && npm install && copy .env.example .env.local && npm run dev
 
 CLO8
 
-- [x] รัน `npm test` ผ่าน 69/69 และตัวเลขตรงกับ `coverage-report.md`
+- [x] รัน `npm test` ผ่าน 87/87 และตัวเลขตรงกับผลที่รันบนเครื่องผู้จัดทำและ `coverage-report.md`
 - [x] ไม่มี merge conflict หลงเหลือ
 - [x] route ในโค้ดตรงกับ `openapi.yaml` ครบ 20 รายการ
 - [ ] โคลนใหม่แล้วรันครบทั้ง 3 บริการได้ (หัวข้อ 5.1)
-- [ ] เปิด Swagger UI ทั้งพอร์ต 3000 และ 3001 ได้
+- [x] เปิด Swagger UI ทั้งพอร์ต 3000 และ 3001 ได้
 
 CLO6
 
-- [ ] ดูหนังสือ / ดูสมาชิก / เพิ่มสมาชิก / ยืม / คืน ผ่านหน้าเว็บ
-- [ ] ปิด Backend แล้วเปิดหน้าเว็บ เห็นข้อความ error ชัดเจน
-- [ ] เห็นสถานะ loading ตอนโหลด (ใช้ Slow 3G ใน DevTools)
-- [ ] ฟอร์มกันข้อมูลผิดก่อนส่ง (ชื่อสั้น, อีเมลผิด, ช่องว่าง, วันที่ย้อนหลัง)
-- [ ] เก็บภาพหน้าจอ: รายการหนังสือ, หลังเพิ่มสมาชิก, หลังยืมและคืน, Network ที่เห็น HTTP status, ข้อความ error/validation
+- [x] ดูหนังสือ / ดูสมาชิก / เพิ่มสมาชิก / ยืม / คืน ผ่านหน้าเว็บ
+- [x] ปิด Backend แล้วเปิดหน้าเว็บ เห็นข้อความ error ชัดเจน
+- [x] เห็นสถานะ loading ตอนโหลด (ใช้ Slow 3G ใน DevTools)
+- [x] ฟอร์มกันข้อมูลผิดก่อนส่ง (ชื่อสั้น, อีเมลผิด, ช่องว่าง, วันที่ย้อนหลัง)
+- [x] เก็บภาพหน้าจอ: รายการหนังสือ, หลังเพิ่มสมาชิก, หลังยืมและคืน, Network ที่เห็น HTTP status, ข้อความ error/validation
 
 CLO7
 
@@ -188,6 +188,6 @@ CLO7
 
 ไฟล์ส่งงาน
 
-- [ ] ลบ `src/index.circulation-backup.js` และโฟลเดอร์ `coverage/` ที่ถูก commit ทั้งที่อยู่ใน `.gitignore` (`git rm -r --cached coverage`)
-- [ ] ไม่มี `.env` หรือรหัสผ่านใน repo
-- [ ] โครงสร้างตรงตามที่กำหนด: `src/`, `frontend/`, `openapi.yaml`, `coverage-report.md`, `clo-requirements-checklist.md`, `package.json`
+- [x] ลบ `src/index.circulation-backup.js` และเลิกติดตาม `coverage/` ใน git แล้ว (ตรวจจาก `origin/main`)
+- [x] ไม่มี `.env` หรือรหัสผ่านใน repo
+- [x] โครงสร้างตรงตามที่กำหนด: `src/`, `frontend/`, `openapi.yaml`, `coverage-report.md`, `clo-requirements-checklist.md`, `package.json`
