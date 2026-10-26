@@ -11,6 +11,8 @@ servers:
   - url: http://localhost:3000
     description: Local Book API
 
+security: []
+
 tags:
   - name: Books
     description: จัดการหนังสือ
@@ -30,6 +32,7 @@ paths:
     get:
       tags: [Books]
       summary: ดูรายการหนังสือและค้นหาหนังสือ
+      operationId: get_api_books
       parameters:
         - name: q
           in: query
@@ -49,6 +52,7 @@ paths:
     post:
       tags: [Books]
       summary: เพิ่มหนังสือ
+      operationId: post_api_books
       requestBody:
         required: true
         content:
@@ -75,6 +79,7 @@ paths:
     get:
       tags: [Books]
       summary: ดูรายละเอียดหนังสือ
+      operationId: get_api_books_id
       responses:
         '200':
           description: รายละเอียดหนังสือ
@@ -89,6 +94,7 @@ paths:
     put:
       tags: [Books]
       summary: แก้ไขหนังสือ
+      operationId: put_api_books_id
       requestBody:
         required: true
         content:
@@ -113,6 +119,7 @@ paths:
     delete:
       tags: [Books]
       summary: ลบหนังสือ
+      operationId: delete_api_books_id
       responses:
         '200':
           description: ลบหนังสือสำเร็จ
@@ -133,6 +140,7 @@ paths:
     get:
       tags: [Books]
       summary: ค้นหาข้อมูลเพิ่มเติมจาก Open Library
+      operationId: get_api_books_id_external_info
       responses:
         '200':
           description: รายละเอียดหนังสือพร้อมข้อมูลภายนอก
@@ -149,6 +157,7 @@ paths:
     get:
       tags: [Authors]
       summary: ดูรายการผู้แต่ง
+      operationId: get_api_authors
       responses:
         '200':
           description: รายการผู้แต่ง
@@ -161,6 +170,7 @@ paths:
     post:
       tags: [Authors]
       summary: เพิ่มผู้แต่ง
+      operationId: post_api_authors
       requestBody:
         required: true
         content:
@@ -185,6 +195,7 @@ paths:
     get:
       tags: [Authors]
       summary: ดูหนังสือของผู้แต่ง
+      operationId: get_api_authors_id_books
       responses:
         '200':
           description: ข้อมูลผู้แต่งและหนังสือ
@@ -201,6 +212,7 @@ paths:
     get:
       tags: [Categories]
       summary: ดูรายการหมวดหมู่
+      operationId: get_api_categories
       responses:
         '200':
           description: รายการหมวดหมู่
@@ -213,6 +225,7 @@ paths:
     post:
       tags: [Categories]
       summary: เพิ่มหมวดหมู่
+      operationId: post_api_categories
       requestBody:
         required: true
         content:
@@ -240,6 +253,7 @@ paths:
     get:
       tags: [Health]
       summary: ตรวจสอบสถานะ Circulation Service
+      operationId: get_health
       responses:
         '200':
           description: Service ทำงานปกติ
@@ -255,6 +269,7 @@ paths:
     get:
       tags: [Members]
       summary: ดูรายชื่อสมาชิก
+      operationId: get_api_members
       responses:
         '200':
           description: รายชื่อสมาชิก
@@ -267,6 +282,7 @@ paths:
     post:
       tags: [Members]
       summary: เพิ่มสมาชิก
+      operationId: post_api_members
       requestBody:
         required: true
         content:
@@ -296,6 +312,7 @@ paths:
     put:
       tags: [Members]
       summary: แก้ไขข้อมูลสมาชิก
+      operationId: put_api_members_id
       description: แก้ไขชื่อ อีเมล และเบอร์โทรศัพท์ของสมาชิก
       requestBody:
         required: true
@@ -321,6 +338,7 @@ paths:
     delete:
       tags: [Members]
       summary: ลบสมาชิก
+      operationId: delete_api_members_id
       description: ลบสมาชิกที่ไม่มีข้อจำกัดจากประวัติการยืม
       responses:
         '200':
@@ -351,6 +369,7 @@ paths:
     get:
       tags: [Members]
       summary: ดูประวัติการยืมของสมาชิก
+      operationId: get_api_members_id_loans
       responses:
         '200':
           description: ประวัติการยืมของสมาชิก
@@ -372,6 +391,7 @@ paths:
     get:
       tags: [Loans]
       summary: ดูรายการยืมเกินกำหนด
+      operationId: get_api_loans_overdue
       responses:
         '200':
           description: รายการยืมเกินกำหนดและยังไม่คืน
@@ -389,6 +409,7 @@ paths:
     post:
       tags: [Loans]
       summary: ยืมหนังสือ
+      operationId: post_api_loans
       requestBody:
         required: true
         content:
@@ -420,6 +441,7 @@ paths:
     put:
       tags: [Loans]
       summary: คืนหนังสือ
+      operationId: put_api_loans_id_return
       responses:
         '200':
           description: คืนหนังสือสำเร็จ
@@ -498,7 +520,6 @@ components:
           type: string
           example: ok
 
-    # Matches the fields returned by the Book API list query.
     Book:
       type: object
       required: [book_id, title, isbn, price, author_id, author_name]
@@ -623,17 +644,19 @@ components:
               minimum: 0
               description: จำนวนครั้งที่เรียก API ภายนอก
             external:
-              nullable: true
               description: ข้อมูลจาก Open Library หรือ null เมื่อใช้ fallback
+              nullable: true
               oneOf:
                 - type: object
                   additionalProperties: true
                 - type: string
             message:
               type: string
+              nullable: true
               description: ข้อความอธิบายผลลัพธ์
             fallback_reason:
               type: string
+              nullable: true
               description: สาเหตุที่ใช้ fallback
 
     Author:

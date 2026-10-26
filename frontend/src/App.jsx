@@ -26,6 +26,14 @@ const CIRCULATION_API = getApiUrl(
 
 const VALID_TABS = ["books", "members", "borrow", "history"];
 
+// วันนี้ตามเวลาเครื่องผู้ใช้ รูปแบบ YYYY-MM-DD (ไม่ใช้ toISOString เพราะเป็นเวลา UTC
+// ทำให้ช่วงเที่ยงคืนถึง 07:00 ของไทยได้วันที่เมื่อวาน)
+function getToday() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 function getSavedTab() {
   try {
     const savedTab = localStorage.getItem("library_active_tab");
@@ -42,6 +50,7 @@ function App() {
   const [loans, setLoans] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [today] = useState(getToday); // ใช้เป็นวันที่ต่ำสุดของช่องวันกำหนดคืน
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [editingMemberId, setEditingMemberId] = useState(null);
@@ -197,8 +206,9 @@ function App() {
     }
   }
 
-  // โหลดข้อมูลเมื่อเปิดเว็บ
+  // โหลดข้อมูลเมื่อเปิดเว็บ (ดึงข้อมูลจาก API ภายนอกตอน mount จึงต้องตั้ง loading ใน effect)
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     refreshData();
   }, []);
 
@@ -354,7 +364,7 @@ function App() {
     setMessage("");
 
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getToday();
 
       if (!loanForm.book_id || !loanForm.member_id || !loanForm.due_date) {
         throw new Error("กรุณากรอกข้อมูลการยืมให้ครบถ้วน");
@@ -769,7 +779,7 @@ function App() {
               <input
                 type="date"
                 value={loanForm.due_date}
-                min={new Date().toISOString().slice(0, 10)}
+                min={today}
                 onChange={(e) =>
                   setLoanForm({ ...loanForm, due_date: e.target.value })
                 }

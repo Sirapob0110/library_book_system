@@ -645,6 +645,7 @@ components:
               description: จำนวนครั้งที่เรียก API ภายนอก
             external:
               description: ข้อมูลจาก Open Library หรือ null เมื่อใช้ fallback
+              nullable: true
               oneOf:
                 - type: object
                   additionalProperties: true
