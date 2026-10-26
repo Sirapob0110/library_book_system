@@ -10,6 +10,7 @@ jest.mock("../src/services/external-api", () => ({
 const request = require("supertest");
 const { as, admin } = require("./helpers/auth");
 const app = require("../src/index");
+const cache = require("../src/cache");
 const pool = require("../src/db");
 const { lookupBookByIsbn } = require("../src/services/external-api");
 
@@ -58,47 +59,134 @@ describe("Book API", () => {
 
   // ---------- GET BOOKS ----------
 
-  describe("GET /api/books", () => {
-    test("returns books when query succeeds", async () => {
-      const books = [
-        {
-          book_id: 1,
-          title: "Test Book",
-          isbn: "9780000000001",
-          total_copies: 3,
-          available_copies: 2,
-          author_name: "Test Author",
-        },
-      ];
+  // รายการหนังสือใช้ 2 query: นับจำนวนทั้งหมด แล้วดึงข้อมูลหน้านั้น
+  function mockBookList(rows, total = rows.length) {
+    pool.query.mockResolvedValueOnce([[{ total }]]).mockResolvedValueOnce([rows]);
+  }
 
-      pool.query.mockResolvedValueOnce([books]);
+  describe("GET /api/books", () => {
+    const books = [
+      {
+        book_id: 1,
+        title: "Test Book",
+        isbn: "9780000000001",
+        total_copies: 3,
+        available_copies: 2,
+        author_name: "Test Author",
+      },
+    ];
+
+    test("returns books with pagination (defaults page 1, limit 10)", async () => {
+      mockBookList(books);
 
       const res = await as(app, admin).get("/api/books");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toEqual(books);
+      expect(res.body.pagination).toEqual({ page: 1, limit: 10, total: 1, totalPages: 1 });
+      expect(res.body.source).toBe("database");
+      expect(res.headers["x-cache"]).toBe("MISS");
     });
 
     test("returns an empty list when no books exist", async () => {
-      pool.query.mockResolvedValueOnce([[]]);
+      mockBookList([]);
 
       const res = await as(app, admin).get("/api/books");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
+      expect(res.body.pagination.totalPages).toBe(1);
     });
 
     test("filters books by search query", async () => {
-      pool.query.mockResolvedValueOnce([[bookDetail]]);
+      mockBookList([bookDetail]);
 
       const res = await as(app, admin).get("/api/books").query({ q: "Test" });
 
       expect(res.status).toBe(200);
       expect(pool.query).toHaveBeenCalledWith(
-        expect.stringContaining("WHERE b.title LIKE ? OR a.name LIKE ?"),
+        expect.stringContaining("WHERE (b.title LIKE ? OR a.name LIKE ?)"),
         ["%Test%", "%Test%"],
       );
+    });
+
+    test("applies page, limit and computes offset and totalPages", async () => {
+      mockBookList(books, 25);
+
+      const res = await as(app, admin).get("/api/books").query({ page: 2, limit: 10 });
+
+      expect(res.body.pagination).toEqual({ page: 2, limit: 10, total: 25, totalPages: 3 });
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining("LIMIT ? OFFSET ?"),
+        [10, 10],
+      );
+    });
+
+    test("clamps limit to 100 and falls back to defaults for invalid paging", async () => {
+      mockBookList(books);
+      const big = await as(app, admin).get("/api/books").query({ limit: 5000 });
+      expect(big.body.pagination.limit).toBe(100);
+
+      mockBookList(books);
+      const bad = await as(app, admin)
+        .get("/api/books")
+        .query({ page: "abc", limit: "-3" });
+      expect(bad.body.pagination.page).toBe(1);
+      expect(bad.body.pagination.limit).toBe(1);
+
+      mockBookList(books);
+      const zero = await as(app, admin).get("/api/books").query({ page: 0 });
+      expect(zero.body.pagination.page).toBe(1);
+    });
+
+    test("sorts by an allowed field and order", async () => {
+      mockBookList(books);
+
+      await as(app, admin).get("/api/books").query({ sort: "price", order: "desc" });
+
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining("ORDER BY b.price DESC, b.book_id ASC"),
+        [10, 0],
+      );
+    });
+
+    test("falls back to id when sort is not in the allowlist (SQL injection attempt)", async () => {
+      mockBookList(books);
+
+      const res = await as(app, admin)
+        .get("/api/books")
+        .query({ sort: "id;DROP TABLE books--", order: "desc; DELETE" });
+
+      expect(res.status).toBe(200);
+      const sql = pool.query.mock.calls.at(-1)[0];
+      expect(sql).toContain("ORDER BY b.book_id ASC, b.book_id ASC");
+      expect(sql).not.toContain("DROP");
+    });
+
+    test("filters by author_id, category_id and availability with bound parameters", async () => {
+      mockBookList(books);
+
+      await as(app, admin)
+        .get("/api/books")
+        .query({ author_id: 2, category_id: 3, available: "true" });
+
+      const [sql, params] = pool.query.mock.calls.at(-1);
+      expect(sql).toContain("b.author_id = ?");
+      expect(sql).toContain("bc.category_id = ?");
+      expect(sql).toContain("b.available_copies > 0");
+      expect(params).toEqual([2, 3, 10, 0]);
+    });
+
+    test("ignores a non-numeric author_id and a repeated q parameter", async () => {
+      mockBookList(books);
+
+      await as(app, admin).get("/api/books?author_id=abc&q=a&q=b");
+
+      const [sql, params] = pool.query.mock.calls.at(-1);
+      expect(sql).not.toContain("b.author_id = ?");
+      expect(sql).not.toContain("LIKE");
+      expect(params).toEqual([10, 0]);
     });
 
     test("returns 500 when database query fails", async () => {
@@ -112,6 +200,25 @@ describe("Book API", () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
       log.mockRestore();
+    });
+
+    test("uses the shared cache when Redis is available (HIT skips the database)", async () => {
+      const shared = jest.spyOn(cache, "isShared").mockReturnValue(true);
+      const remember = jest
+        .spyOn(cache, "remember")
+        .mockResolvedValue({ value: { rows: books, pagination: { page: 1, limit: 10, total: 1, totalPages: 1 } }, source: "cache" });
+
+      const res = await as(app, admin).get("/api/books").query({ q: "x", sort: "title" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.source).toBe("cache");
+      expect(res.headers["x-cache"]).toBe("HIT");
+      expect(pool.query).not.toHaveBeenCalled();
+      expect(remember.mock.calls[0][0]).toContain('"q":"x"');
+      expect(remember.mock.calls[0][0]).toContain('"sort":"title"');
+
+      shared.mockRestore();
+      remember.mockRestore();
     });
   });
 

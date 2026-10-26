@@ -6,22 +6,32 @@
 
 ```
 Frontend (React + Vite)  :5173
+          │
+          ▼
+API Gateway :8000   (ตรวจ JWT, ส่งต่อ, timeout 3 วินาที, log กลาง, 503 เมื่อบริการล่ม)
    │            │
    ▼            ▼
 Book API :3000      Circulation Service :3001
 (หนังสือ ผู้แต่ง หมวดหมู่,     (สมาชิก ยืม คืน รายการเกินกำหนด)
- สมัคร/เข้าสู่ระบบ,
+ สมัคร/เข้าสู่ระบบ, GraphQL,
  ข้อมูลเพิ่มเติมจาก Open Library)
-   │            │
+   │            │            │
+   │            └─── Redis (ไม่บังคับ: cache ที่ใช้ร่วมกัน)
    └─────┬──────┘
          ▼
  MySQL / MariaDB  (ฐานข้อมูล book_system ชุดเดียว)
 ```
 
+ทุกบริการยังเรียกตรงได้ (Book API :3000, Circulation :3001) หน้าเว็บเรียกผ่าน Gateway
+
 | ส่วน | โฟลเดอร์ | พอร์ต |
 |---|---|---|
 | Book API | `src/index.js` | 3000 |
 | Circulation Service | `src/circulation/index.js` | 3001 |
+| API Gateway | `src/gateway/index.js` | 8000 |
+| GraphQL (Lab 2) | `src/graphql/` (เส้นทาง `POST /graphql` ของ Book API) | — |
+| Cache (Redis หรือหน่วยความจำ) | `src/cache.js` | — |
+| Rate limit, ตรวจข้อมูล (zod), error handler, pagination | `src/middlewares/`, `src/schemas/` | — |
 | ระบบยืนยันตัวตนและตรวจสิทธิ์ (JWT) ใช้ร่วมกันทั้งสองบริการ | `src/auth.js` | — |
 | โมดูลเรียก Open Library (timeout, retry, fallback) | `src/services/external-api.js` | — |
 | Frontend | `frontend/` | 5173 |
@@ -75,13 +85,18 @@ mysql -u root --default-character-set=utf8mb4 < seed.sql
 
 ข้อมูลตัวอย่างประกอบด้วยหนังสือ 6 เล่ม ผู้แต่ง 4 คน หมวดหมู่ 4 หมวด สมาชิก 2 คน และบัญชีผู้ใช้ 3 บัญชี (ดูหัวข้อ "บัญชีสำหรับทดลองใช้")
 
-### 4. เริ่มระบบ (เปิด 3 หน้าต่าง terminal)
+### 4. เริ่มระบบ
 
 ```bash
-npm start                      # Book API        http://localhost:3000
-npm run start:circulation      # Circulation     http://localhost:3001
+npm run start:all              # Book API :3000 + Circulation :3001 + Gateway :8000 ในคำสั่งเดียว
 cd frontend && npm run dev     # Frontend        http://localhost:5173
 ```
+
+หรือเปิดแยกเองทีละบริการ: `npm start` (Book API), `npm run start:circulation`, `npm run start:gateway`
+
+ตั้ง `VITE_BOOK_API_URL` และ `VITE_CIRCULATION_API_URL` ใน `frontend/.env.local` เป็น `http://localhost:8000` เพื่อให้หน้าเว็บเรียกผ่าน Gateway (ค่าในไฟล์ตัวอย่าง)
+
+**Redis (ไม่บังคับ):** ถ้ามี Redis ให้ตั้ง `REDIS_URL=redis://localhost:6379` ใน `.env` cache ของรายการหนังสือจะทำงานและใช้ร่วมกันทุกบริการ (ล้างอัตโนมัติเมื่อมีการยืม/คืน/แก้ข้อมูล) ถ้าไม่ตั้งหรือ Redis ล่ม ระบบยังทำงานได้ปกติโดยไม่ใช้ cache ที่ใช้ร่วมกัน
 
 เปิดเว็บที่ http://localhost:5173 แล้วเข้าสู่ระบบ
 
@@ -114,6 +129,28 @@ cd frontend && npm run dev     # Frontend        http://localhost:5173
 | Book API | http://localhost:3000/api-docs |
 | Circulation Service | http://localhost:3001/api-docs |
 
+### ความสามารถที่เพิ่มจากแล็บ
+
+| แล็บ | สิ่งที่ทำในโปรเจกต์ | ดูได้ที่ |
+|---|---|---|
+| Lab 2 GraphQL | `POST /graphql` (query: books, book, authors, author, categories; mutation เฉพาะ admin) แก้ N+1 ด้วย loader, จำกัดความลึก 5 | `src/graphql/`, `rest-vs-graphql.md` |
+| Lab 4 Security | helmet, CORS, morgan, จำกัดขนาด body 10KB (413), 404 และ error handler มาตรฐาน | `src/middlewares/errors.js` |
+| Lab 7 Performance | แบ่งหน้า/เรียง/กรองรายการหนังสือ, cache (Redis หรือหน่วยความจำ) พร้อม `X-Cache` | `src/cache.js`, `src/middlewares/query-parser.js` |
+| Lab 12 Validation | ตรวจ body ด้วย zod (`VALIDATION_ERROR` + `details`), rate limit | `src/schemas/`, `src/middlewares/rate-limiter.js` |
+| Lab 13 Gateway | Gateway :8000 ตรวจ JWT ส่งต่อ timeout 3 วินาที 503 เมื่อบริการล่ม health รวม | `src/gateway/index.js` |
+| Lab 14 Scalability | วิเคราะห์คอขวดและแผนขยายระบบ (เอกสาร) | `scalability-design.md` |
+
+**Rate limit:** ทั้งระบบ 100 คำขอ/นาที/IP, login ที่ผิดได้ 5 ครั้ง/15 นาที/IP, สมัครสมาชิก 10 ครั้ง/15 นาที/IP เกินแล้วตอบ 429 (รีสตาร์ตบริการเพื่อล้างตัวนับตอนทดสอบด้วย Newman ซ้ำ)
+
+**รายการหนังสือ:** `GET /api/books?q=&author_id=&category_id=&available=true&sort=title&order=desc&page=1&limit=10` (sort ได้: id, title, published_year, price, available_copies)
+
+**ตัวอย่าง GraphQL:**
+
+```bash
+curl -s localhost:3000/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"query":"{ books(limit: 3) { items { title author { name } categories { name } } pagination { total } } }"}'
+```
+
 สเปก OpenAPI อยู่ที่ `openapi.yaml` (ครอบคลุมทั้งสองบริการ รวมเส้นทาง `/api/auth/*`) ใน Swagger UI ให้เรียก `POST /api/auth/login` ก่อน แล้วกดปุ่ม **Authorize** วาง token ที่ได้ และมีชุด request ตัวอย่างใน `postman_collection.json` (Book API, รันโฟลเดอร์ `Auth` ก่อนเพื่อรับ token)
 
 สำเนาของ `openapi.yaml` ที่ `src/circulation/openapi.yaml` ใช้แสดง Swagger ของ Circulation Service ต้องเหมือนไฟล์ที่ราก ถ้าแก้ไฟล์ราก ให้คัดลอกทับด้วย (`copy openapi.yaml src\circulation\openapi.yaml` บน Windows)
@@ -124,7 +161,7 @@ cd frontend && npm run dev     # Frontend        http://localhost:5173
 npm test
 ```
 
-รัน Jest พร้อมรายงาน coverage (166 tests, 5 ชุดทดสอบ) ใช้ฐานข้อมูลจำลอง ไม่ต้องเปิด MySQL และไม่อ่านไฟล์ `.env` ผลจึงเท่ากันทุกเครื่อง สรุปผลดู `coverage-report.md`
+รัน Jest พร้อมรายงาน coverage (305 tests, 11 ชุดทดสอบ) ใช้ฐานข้อมูลจำลอง ไม่ต้องเปิด MySQL และไม่อ่านไฟล์ `.env` ผลจึงเท่ากันทุกเครื่อง สรุปผลดู `coverage-report.md`
 
 ## ตัวแปรสภาพแวดล้อม (`.env`)
 
@@ -138,12 +175,17 @@ npm test
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | ที่อยู่ของหน้าเว็บ ใช้กำหนด CORS ของทั้งสองบริการ |
 | `JWT_SECRET` | ค่าสำหรับพัฒนา (มีคำเตือน) | ความลับสำหรับเซ็นและตรวจ JWT ต้องตั้งเป็นข้อความสุ่มของตัวเอง |
 | `JWT_EXPIRES_IN` | `2h` | อายุของ token |
+| `GATEWAY_PORT` | `8000` | พอร์ตของ API Gateway |
+| `BOOK_SERVICE_URL`, `CIRCULATION_SERVICE_URL` | `http://localhost:3000`, `http://localhost:3001` | ปลายทางที่ Gateway ส่งต่อ |
+| `GATEWAY_TIMEOUT_MS` | `3000` | เวลารอบริการปลายทางก่อนตอบ 503 |
+| `REDIS_URL` | (ไม่ตั้ง) | ถ้าตั้ง จะใช้ Redis เป็น cache ที่ใช้ร่วมกัน |
+| `RATE_LIMIT_MAX`, `AUTH_RATE_LIMIT_MAX`, `REGISTER_RATE_LIMIT_MAX` | `100`, `5`, `10` | โควตา rate limit (ทั่วไป/นาที, login ผิด/15 นาที, สมัคร/15 นาที) |
 | `EXTERNAL_API_BASE_URL` | `https://openlibrary.org` | URL ของ API ภายนอก |
 | `EXTERNAL_API_TIMEOUT_MS` | `3000` | เวลารอสูงสุดต่อครั้ง |
 | `EXTERNAL_API_RETRIES` | `2` | จำนวนครั้งที่ลองซ้ำ (รวมครั้งแรกเป็น 3) |
 | `EXTERNAL_API_BACKOFF_MS` | `300` | เวลารอก่อนลองซ้ำ (เพิ่มเป็นเท่าตัวทุกครั้ง) |
 
-ตัวแปรของ Frontend (`frontend/.env.local`): `VITE_BOOK_API_URL` และ `VITE_CIRCULATION_API_URL`
+ตัวแปรของ Frontend (`frontend/.env.local`): `VITE_BOOK_API_URL` และ `VITE_CIRCULATION_API_URL` (ตั้งเป็นที่อยู่ Gateway `http://localhost:8000` ทั้งคู่)
 
 ## แก้ปัญหาที่พบบ่อย
 
@@ -154,6 +196,8 @@ npm test
 | API ตอบ 500 `Unknown column ... total_copies` หรือ `Table ... doesn't exist` (เช่น `users`) | ฐานข้อมูลเป็นเวอร์ชันเก่า รัน `schema.sql` และ `seed.sql` ใหม่ |
 | เข้าสู่ระบบไม่ได้ทั้งที่รหัสผ่านถูก | ยังไม่ได้โหลด `seed.sql` ใหม่ (ตาราง `users` ว่าง) หรือ API ตอบ 500 ให้ดู log ของ Book API |
 | API ตอบ 401 ทุกคำขอจากหน้าเว็บหรือ Postman | ไม่ได้แนบ token หมดอายุ หรือสองบริการใช้ `JWT_SECRET` ไม่ตรงกัน (ถ้าแก้ `.env` ต้องเริ่มทั้งสองบริการใหม่ และเข้าสู่ระบบใหม่) |
+| API ตอบ 429 | เกินโควตา rate limit (เช่น login ผิดเกิน 5 ครั้ง) รอ 15 นาที หรือรีสตาร์ตบริการ |
+| Gateway ตอบ 503 `SERVICE_UNAVAILABLE` | บริการปลายทาง (Book API หรือ Circulation) ไม่ทำงาน ให้เปิดด้วย `npm run start:all` |
 | API ตอบ 403 | เข้าสู่ระบบแล้วแต่บทบาท user ไม่มีสิทธิ์ทำรายการนั้น ให้ใช้บัญชี admin |
 | หน้าเว็บขาวโล่ง | ยังไม่มี `frontend/.env.local` ให้คัดลอกจาก `frontend/.env.example` แล้วเริ่ม `npm run dev` ใหม่ |
 | หน้าเว็บขึ้นว่าเชื่อมต่อ API ไม่ได้ | ตรวจว่ารัน Book API และ Circulation Service ครบทั้งสองตัว และ Vite ใช้พอร์ต 5173 (Book API อนุญาต CORS เฉพาะ `http://localhost:5173` ถ้า Vite เปลี่ยนไปใช้พอร์ตอื่น ให้ปิดโปรแกรมที่ใช้พอร์ต 5173 อยู่แล้วเริ่มใหม่) |
@@ -164,7 +208,13 @@ npm test
 
 ```
 ├── src/
-│   ├── index.js                 Book API (+ /api/auth/*)
+│   ├── index.js                 Book API (+ /api/auth/*, /graphql)
+│   ├── gateway/                 API Gateway
+│   ├── graphql/                 สคีมาและ resolver ของ GraphQL
+│   ├── cache.js                 cache (Redis / หน่วยความจำ)
+│   ├── middlewares/             rate limit, error handler, pagination
+│   ├── schemas/                 สคีมา zod ตรวจข้อมูลเข้า
+│   ├── services/catalog.js      ชั้นข้อมูลหนังสือ (ใช้ร่วม REST และ GraphQL)
 │   ├── auth.js                  JWT: ออก token, ตรวจ token, ตรวจบทบาท
 │   ├── db.js                    connection pool
 │   ├── circulation/             Circulation Service (+ circulation.test.js, openapi.yaml)
@@ -179,5 +229,7 @@ npm test
 ├── failure-scenario-results.md  ผลทดสอบ retry / timeout / fallback
 ├── auth-test-results.md         ผลทดสอบ login และสิทธิ์ของ admin / user (ฐานข้อมูลจริง)
 ├── microservices-design.md      การออกแบบสถาปัตยกรรม
+├── scalability-design.md        วิเคราะห์การขยายระบบ (Lab 14)
+├── rest-vs-graphql.md           เปรียบเทียบ REST กับ GraphQL (Lab 2)
 └── requirement.md, erd.png      ข้อกำหนดและแผนภาพ ER
 ```

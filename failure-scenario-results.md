@@ -176,3 +176,18 @@ curl http://localhost:3000/api/books/3/external-info
 EXTERNAL_API_TIMEOUT_MS=1 npm start
 ```
 ดู log ที่ terminal ของเซิร์ฟเวอร์ (บรรทัดที่ขึ้นต้นด้วย `[external-api]`)
+
+## 8. Gateway: บริการปลายทางล่ม (Lab 13)
+
+ทดสอบกับระบบจริง (ฐานข้อมูลจริง, Book API :3000, Circulation :3001, Gateway :8000) เมื่อวันที่ 26 ตุลาคม 2569
+
+| ขั้นตอน | ผลที่ได้ |
+|---|---|
+| `GET /api/members` ผ่าน Gateway ตอนปกติ | 200 |
+| ปิด Circulation Service แล้วเรียกซ้ำ | **503** `{"code":"SERVICE_UNAVAILABLE","message":"ไม่สามารถติดต่อบริการปลายทางได้ในขณะนี้ กรุณาลองใหม่ภายหลัง"}` ใช้เวลา 4.5 ms (ปฏิเสธการเชื่อมต่อทันที) |
+| เรียก `GET /api/books` ระหว่างนั้น | 200 (Book API ไม่ได้รับผลกระทบ) |
+| `GET /health` ของ Gateway | 503 `{"upstream":{"book-api":"ok","circulation-service":"down"}}` |
+| log ของ Gateway | `[gateway] เรียก http://localhost:3001 ไม่สำเร็จ: ECONNREFUSED` และ `GET /api/members 503` |
+| เปิด Circulation กลับมา | `GET /api/members` ได้ 200 โดยไม่ต้องรีสตาร์ต Gateway |
+
+กรณีบริการค้าง (ตอบช้ากว่า 3 วินาที) ทดสอบด้วย Jest (`tests/gateway.test.js`) โดยจำลองข้อผิดพลาด `ECONNABORTED` ได้ 503 พร้อมข้อความระบุว่าหมดเวลา ไม่ได้ทดสอบบริการค้างจริง

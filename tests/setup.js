@@ -12,4 +12,8 @@ jest.mock("dotenv", () => ({ config: jest.fn() }));
   "EXTERNAL_API_TIMEOUT_MS",
   "EXTERNAL_API_RETRIES",
   "EXTERNAL_API_BACKOFF_MS",
+  "REDIS_URL",
+  "RATE_LIMIT_MAX",
+  "AUTH_RATE_LIMIT_MAX",
+  "REGISTER_RATE_LIMIT_MAX",
 ].forEach((key) => delete process.env[key]);

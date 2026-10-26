@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Login from "./Login";
 import AdminCatalog, { OverdueLoans } from "./AdminCatalog";
+import BookBrowser from "./BookBrowser";
 
 // อ่าน API URLs จาก Environment Variables ของ Vite
 function getApiUrl(value, name) {
@@ -75,7 +76,11 @@ function Dashboard({ session, onLogout }) {
   // user ทั่วไปไม่มีแท็บสมาชิกและแท็บจัดการหนังสือ (เฉพาะ admin)
   const adminTab = savedTab === "members" || savedTab === "catalog";
   const tab = adminTab && !isAdmin ? "books" : savedTab;
+  // books: หนังสือสูงสุด 100 เล่มแรก ใช้ในรายการเลือกของฟอร์มยืมและตารางจัดการของ admin
+  // (หน้ารายการหนังสือค้นหา/แบ่งหน้าเองที่ BookBrowser)
   const [books, setBooks] = useState([]);
+  const [bookTotal, setBookTotal] = useState(0);
+  const [dataVersion, setDataVersion] = useState(0); // เพิ่มค่าเมื่อโหลดข้อมูลใหม่ เพื่อให้ BookBrowser โหลดตาม
   const [members, setMembers] = useState([]);
   const [loans, setLoans] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState(
@@ -186,7 +191,7 @@ function Dashboard({ session, onLogout }) {
 
   // โหลดหนังสือจาก Catalog Service
   async function loadBooks() {
-    const result = await request(`${BOOK_API}/api/books`);
+    const result = await request(`${BOOK_API}/api/books?limit=100`);
 
     const bookList = Array.isArray(result)
       ? result
@@ -197,6 +202,8 @@ function Dashboard({ session, onLogout }) {
           : [];
 
     setBooks(bookList);
+    setBookTotal(result.pagination?.total ?? bookList.length);
+    setDataVersion((version) => version + 1);
   }
 
   // โหลดสมาชิกจาก Circulation Service
@@ -549,7 +556,7 @@ function Dashboard({ session, onLogout }) {
       <section className="status-row">
         <div className="status-card">
           <span>หนังสือที่โหลดได้</span>
-          <strong>{books.length}</strong>
+          <strong>{bookTotal}</strong>
         </div>
 
         {isAdmin ? (
@@ -631,56 +638,12 @@ function Dashboard({ session, onLogout }) {
 
       {/* รายการหนังสือ */}
       {tab === "books" && (
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">CATALOG SERVICE</p>
-              <h2>รายการหนังสือ</h2>
-            </div>
-
-            <span className="count">{books.length} รายการ</span>
-          </div>
-
-          {books.length === 0 && !loading ? (
-            <p className="empty">
-              ไม่พบข้อมูลหนังสือ หากมีข้อผิดพลาดจะแสดงข้อความด้านบน
-            </p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>ชื่อหนังสือ</th>
-                    <th>ผู้แต่ง</th>
-                    <th>ปีที่พิมพ์</th>
-                    <th>ISBN</th>
-                    <th>ราคา</th>
-                    <th>จำนวนคงเหลือ</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {books.map((book) => (
-                    <tr key={book.book_id}>
-                      <td>{book.book_id}</td>
-                      <td>{book.title}</td>
-                      <td>{book.author_name || "-"}</td>
-                      <td>{book.published_year || "-"}</td>
-                      <td>{book.isbn || "-"}</td>
-                      <td>
-                        {book.price != null
-                          ? `${Number(book.price).toLocaleString("th-TH")} บาท`
-                          : "-"}
-                      </td>
-                      <td>{book.available_copies ?? "API ไม่ส่งข้อมูล"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+        <BookBrowser
+          request={request}
+          bookApi={BOOK_API}
+          dataVersion={dataVersion}
+          showStatus={showStatus}
+        />
       )}
 
       {/* จัดการหนังสือ ผู้แต่ง หมวดหมู่ (admin) */}
@@ -689,6 +652,7 @@ function Dashboard({ session, onLogout }) {
           request={request}
           bookApi={BOOK_API}
           books={books}
+          total={bookTotal}
           loading={loading}
           setLoading={setLoading}
           showStatus={showStatus}

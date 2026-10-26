@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: Library Book System API
-  version: 1.2.0
+  version: 1.3.0
   description: |
     OpenAPI Specification สำหรับระบบ Library Book System
     ครอบคลุม Book API และ Circulation Service
@@ -16,9 +16,23 @@ info:
     - `user` ดูหนังสือ/ผู้แต่ง/หมวดหมู่ได้, ยืมและคืนหนังสือในนามสมาชิกของตัวเอง และดูประวัติของตัวเองเท่านั้น
     - เส้นทางที่ระบุ "(เฉพาะ admin)" ตอบ 403 เมื่อเรียกด้วย user และตอบ 401 เมื่อไม่ได้เข้าสู่ระบบ
 
+    **จุดเข้าใช้งาน:** เรียกตรงที่ Book API (:3000) / Circulation Service (:3001) หรือผ่าน API Gateway (:8000)
+    ซึ่งตรวจ token แล้วส่งต่อให้บริการที่รับผิดชอบด้วย path เดียวกัน (Gateway ตอบ 503 `SERVICE_UNAVAILABLE` เมื่อบริการปลายทางล่ม)
+
+    **ข้อมูลที่ส่งเข้ามา:** ตรวจด้วย zod ถ้าไม่ผ่านตอบ 400 พร้อม `code: "VALIDATION_ERROR"` และ `details` ราย field
+    ขนาด body สูงสุด 10KB (เกินตอบ 413) ข้อผิดพลาดทุกกรณีมีฟิลด์ `message` และ `error`
+
+    **จำกัดจำนวนคำขอ:** ทั้งระบบ 100 คำขอ/นาที/IP, login ผิดได้ 5 ครั้ง/15 นาที/IP, สมัครสมาชิก 10 ครั้ง/15 นาที/IP
+    เกินโควตาตอบ 429 พร้อม header `RateLimit` และ `RateLimit-Policy`
+
+    **รายการหนังสือ:** `GET /api/books` รองรับค้นหา กรอง เรียง และแบ่งหน้า (ค่าที่ไม่ถูกต้องใช้ค่าเริ่มต้น ไม่ error)
+    รายการผู้แต่ง/หมวดหมู่ cache 5 นาที (header `X-Cache: HIT|MISS`, ฟิลด์ `source`)
+
 servers:
   - url: http://localhost:3000
     description: Local Book API
+  - url: http://localhost:8000
+    description: Local API Gateway (ส่งต่อไป Book API และ Circulation Service)
 
 security:
   - bearerAuth: []
@@ -33,7 +47,9 @@ tags:
   - name: Categories
     description: จัดการหมวดหมู่หนังสือ
   - name: Health
-    description: ตรวจสอบสถานะ Circulation Service
+    description: ตรวจสอบสถานะบริการ
+  - name: GraphQL
+    description: อ่านและจัดการหนังสือ ผู้แต่ง หมวดหมู่ ด้วย GraphQL (Book API)
   - name: Members
     description: จัดการสมาชิก
   - name: Loans
@@ -56,6 +72,10 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '201':
           description: สมัครสำเร็จ
           content:
@@ -82,6 +102,10 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: เข้าสู่ระบบสำเร็จ
           content:
@@ -101,6 +125,8 @@ paths:
       summary: ข้อมูลผู้ใช้ที่เข้าสู่ระบบอยู่ (อ่านจาก token)
       operationId: get_api_auth_me
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '200':
           description: ข้อมูลผู้ใช้
           content:
@@ -122,11 +148,67 @@ paths:
           description: ค้นหาจากชื่อหนังสือหรือชื่อผู้แต่ง
           schema:
             type: string
+        - name: author_id
+          in: query
+          required: false
+          description: กรองตามผู้แต่ง
+          schema:
+            type: integer
+        - name: category_id
+          in: query
+          required: false
+          description: กรองตามหมวดหมู่
+          schema:
+            type: integer
+        - name: available
+          in: query
+          required: false
+          description: "`true` = เฉพาะเล่มที่ยังมีให้ยืม"
+          schema:
+            type: string
+            enum: ['true']
+        - name: sort
+          in: query
+          required: false
+          description: ฟิลด์ที่ใช้เรียง (ค่านอกรายการใช้ `id`)
+          schema:
+            type: string
+            enum: [id, title, published_year, price, available_copies]
+            default: id
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+        - name: page
+          in: query
+          required: false
+          description: หน้าที่ต้องการ (ต่ำสุด 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: จำนวนต่อหน้า (1-100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
-          description: รายการหนังสือ
+          description: รายการหนังสือหนึ่งหน้า (cache 60 วินาทีเมื่อเปิดใช้ Redis)
+          headers:
+            X-Cache:
+              $ref: '#/components/headers/XCache'
           content:
             application/json:
               schema:
@@ -144,6 +226,10 @@ paths:
             schema:
               $ref: '#/components/schemas/BookInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -169,6 +255,8 @@ paths:
       summary: ดูรายละเอียดหนังสือ
       operationId: get_api_books_id
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
@@ -192,6 +280,10 @@ paths:
             schema:
               $ref: '#/components/schemas/BookInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -215,6 +307,8 @@ paths:
       summary: ลบหนังสือ (เฉพาะ admin)
       operationId: delete_api_books_id
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -240,6 +334,8 @@ paths:
       summary: ค้นหาข้อมูลเพิ่มเติมจาก Open Library
       operationId: get_api_books_id_external_info
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
@@ -259,10 +355,15 @@ paths:
       summary: ดูรายการผู้แต่ง
       operationId: get_api_authors
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
-          description: รายการผู้แต่ง
+          description: รายการผู้แต่ง (cache 5 นาที)
+          headers:
+            X-Cache:
+              $ref: '#/components/headers/XCache'
           content:
             application/json:
               schema:
@@ -280,6 +381,10 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthorInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -303,6 +408,8 @@ paths:
       summary: ดูหนังสือของผู้แต่ง
       operationId: get_api_authors_id_books
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
@@ -322,10 +429,15 @@ paths:
       summary: ดูรายการหมวดหมู่
       operationId: get_api_categories
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
-          description: รายการหมวดหมู่
+          description: รายการหมวดหมู่ (cache 5 นาที)
+          headers:
+            X-Cache:
+              $ref: '#/components/headers/XCache'
           content:
             application/json:
               schema:
@@ -343,6 +455,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CategoryInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -360,13 +476,51 @@ paths:
         '500':
           $ref: '#/components/responses/BookInternalServerError'
 
+  /graphql:
+    post:
+      tags: [GraphQL]
+      summary: GraphQL endpoint (หนังสือ ผู้แต่ง หมวดหมู่)
+      operationId: post_graphql
+      description: |
+        Query: `books`, `book`, `authors`, `author`, `categories` — Mutation (เฉพาะ admin): `createBook`, `updateBook`,
+        `deleteBook`, `createAuthor`, `createCategory` ความลึกของ query สูงสุด 5 ระดับ
+        ข้อผิดพลาดจาก resolver ตอบ 200 พร้อม `errors[]` (มี `extensions.code`) ส่วน query ที่ผิดไวยากรณ์/ลึกเกินตอบ 400
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+      responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: ผลลัพธ์ GraphQL (`data` และ/หรือ `errors`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+        '400':
+          description: query ไม่ถูกต้องหรือลึกเกินกำหนด
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
   /health:
     servers:
       - url: http://localhost:3001
         description: Local Circulation Service
+      - url: http://localhost:3000
+        description: Local Book API
+      - url: http://localhost:8000
+        description: API Gateway (รวมสถานะทุกบริการ)
     get:
       tags: [Health]
-      summary: ตรวจสอบสถานะ Circulation Service
+      summary: ตรวจสอบสถานะบริการ (Book API, Circulation หรือ Gateway)
       operationId: get_health
       security: []
       responses:
@@ -386,6 +540,8 @@ paths:
       summary: ดูรายชื่อสมาชิก (เฉพาะ admin)
       operationId: get_api_members
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -409,6 +565,10 @@ paths:
             schema:
               $ref: '#/components/schemas/MemberInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -444,6 +604,10 @@ paths:
             schema:
               $ref: '#/components/schemas/MemberInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -468,6 +632,8 @@ paths:
       operationId: delete_api_members_id
       description: ลบสมาชิกที่ไม่มีข้อจำกัดจากประวัติการยืม
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -502,6 +668,8 @@ paths:
       summary: ดูประวัติการยืมของสมาชิก (ดูได้เฉพาะของตัวเอง ยกเว้น admin)
       operationId: get_api_members_id_loans
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -528,6 +696,8 @@ paths:
       summary: ดูรายการยืมเกินกำหนด (เฉพาะ admin)
       operationId: get_api_loans_overdue
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -556,6 +726,10 @@ paths:
             schema:
               $ref: '#/components/schemas/LoanInput'
       responses:
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -586,6 +760,8 @@ paths:
       summary: คืนหนังสือ (user คืนได้เฉพาะรายการยืมของตัวเอง ยกเว้น admin)
       operationId: put_api_loans_id_return
       responses:
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -623,7 +799,36 @@ components:
         type: integer
         minimum: 1
 
+  headers:
+    XCache:
+      description: "`HIT` = ตอบจาก cache, `MISS` = อ่านจากฐานข้อมูล"
+      schema:
+        type: string
+        enum: [HIT, MISS]
+
   responses:
+    TooManyRequests:
+      description: เกินโควตา rate limit (header `RateLimit`, `RateLimit-Policy`, `Retry-After`)
+      headers:
+        RateLimit:
+          schema:
+            type: string
+        RateLimit-Policy:
+          schema:
+            type: string
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BookErrorResponse'
+    PayloadTooLarge:
+      description: "body เกิน 10KB (code PAYLOAD_TOO_LARGE)"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BookErrorResponse'
     Unauthorized:
       description: ไม่ได้เข้าสู่ระบบ, token ไม่ถูกต้อง หรือหมดอายุ (หรือ username/password ผิดตอน login)
       content:
@@ -779,6 +984,24 @@ components:
         message:
           type: string
           example: ไม่พบข้อมูล
+        error:
+          type: string
+          example: ไม่พบข้อมูล
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        details:
+          type: array
+          description: รายละเอียดราย field เมื่อ code = VALIDATION_ERROR
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: title
+              message:
+                type: string
+                example: กรุณากรอกชื่อหนังสือ
 
     CirculationErrorResponse:
       type: object
@@ -787,6 +1010,20 @@ components:
         error:
           type: string
           example: ไม่สามารถดึงข้อมูลสมาชิกได้
+        message:
+          type: string
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
 
     HealthResponse:
       type: object
@@ -795,6 +1032,7 @@ components:
         service:
           type: string
           example: circulation-service
+          description: ชื่อบริการ (`book-api`, `circulation-service` หรือ `api-gateway`)
         status:
           type: string
           example: ok
@@ -865,7 +1103,7 @@ components:
 
     BookListResponse:
       type: object
-      required: [success, data]
+      required: [success, data, pagination]
       properties:
         success:
           type: boolean
@@ -874,6 +1112,57 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Book'
+        pagination:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+            total:
+              type: integer
+              example: 14
+            totalPages:
+              type: integer
+              example: 2
+        source:
+          type: string
+          enum: [cache, database]
+    GraphQLRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          example: '{ books(limit: 3) { data { id title author { name } } pagination { total } } }'
+        variables:
+          type: object
+          additionalProperties: true
+        operationName:
+          type: string
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+          additionalProperties: true
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              message:
+                type: string
+              extensions:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: FORBIDDEN
 
     BookDetailResponse:
       type: object
@@ -976,6 +1265,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Author'
+        source:
+          type: string
+          enum: [cache, database]
 
     AuthorResponse:
       type: object
@@ -1046,6 +1338,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Category'
+        source:
+          type: string
+          enum: [cache, database]
 
     CategoryResponse:
       type: object

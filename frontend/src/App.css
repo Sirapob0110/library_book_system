@@ -748,3 +748,45 @@ input[readonly] {
 .overdue-box {
   margin: 16px 0;
 }
+
+/* ค้นหา เรียง และแบ่งหน้ารายการหนังสือ */
+.book-toolbar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.book-toolbar .check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+.book-toolbar .check input {
+  width: auto;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.pager > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .book-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}

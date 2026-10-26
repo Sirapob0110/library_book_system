@@ -7,6 +7,11 @@ const YAML = require("yaml");
 const swaggerUi = require("swagger-ui-express");
 const db = require("../db");
 const { authenticate, requireRole, deny } = require("../auth");
+const cache = require("../cache");
+const { generalLimiter } = require("../middlewares/rate-limiter");
+const { notFound, errorHandler } = require("../middlewares/errors");
+const { validateBody } = require("../schemas/validate");
+const { memberSchema, loanSchema } = require("../schemas/circulation");
 
 const app = express();
 const PORT = Number(process.env.CIRCULATION_PORT) || 3001;
@@ -16,16 +21,19 @@ const adminOnly = [authenticate, requireRole("admin")];
 // ========================
 // Middleware
 // ========================
+// อยู่หลัง proxy/gateway 1 ชั้น ให้ rate limit นับ IP ของผู้ใช้จริงจาก X-Forwarded-For
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(
   cors({
     origin: FRONTEND_ORIGIN,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
-app.use(express.json());
-app.use(morgan("dev"));
+if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+app.use(express.json({ limit: "10kb" })); // ข้อมูลเกิน 10KB ตอบ 413
 
 // ========================
 // Swagger UI
@@ -38,32 +46,21 @@ const swaggerDocument = YAML.parse(
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // ========================
+// Health check
+// ========================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    service: "circulation-service",
+    status: "ok",
+  });
+});
+
+// ทุก route ด้านล่างนับโควตา 100 คำขอต่อนาทีต่อ IP (Swagger UI ไม่นับ)
+app.use(generalLimiter);
+
+// ========================
 // Helper functions
 // ========================
-function isValidEmail(email) {
-  return (
-    typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-  );
-}
-
-function getMemberInput(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return null;
-  }
-
-  const { name, email, phone } = body;
-
-  if (typeof name !== "string" || !name.trim() || !isValidEmail(email)) {
-    return null;
-  }
-
-  return {
-    name: name.trim(),
-    email: email.trim(),
-    phone: typeof phone === "string" && phone.trim() ? phone.trim() : null,
-  };
-}
-
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
@@ -95,16 +92,6 @@ function handleDatabaseError(res, error, message) {
 }
 
 // ========================
-// Health check
-// ========================
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    service: "circulation-service",
-    status: "ok",
-  });
-});
-
-// ========================
 // GET /api/members
 // ดึงรายชื่อสมาชิก
 // ========================
@@ -132,14 +119,8 @@ app.get("/api/members", ...adminOnly, async (req, res) => {
 // POST /api/members
 // เพิ่มสมาชิก
 // ========================
-app.post("/api/members", ...adminOnly, async (req, res) => {
-  const member = getMemberInput(req.body);
-
-  if (!member) {
-    return res.status(400).json({
-      error: "กรุณาระบุชื่อและอีเมลให้ถูกต้อง",
-    });
-  }
+app.post("/api/members", ...adminOnly, validateBody(memberSchema), async (req, res) => {
+  const member = { ...req.body, phone: req.body.phone || null };
 
   try {
     const [result] = await db.query(
@@ -171,19 +152,13 @@ app.post("/api/members", ...adminOnly, async (req, res) => {
 // PUT /api/members/:id
 // แก้ไขข้อมูลสมาชิก
 // ========================
-app.put("/api/members/:id", ...adminOnly, async (req, res) => {
+app.put("/api/members/:id", ...adminOnly, validateBody(memberSchema), async (req, res) => {
   const memberId = Number(req.params.id);
-  const member = getMemberInput(req.body);
+  const member = { ...req.body, phone: req.body.phone || null };
 
   if (!isPositiveInteger(memberId)) {
     return res.status(400).json({
       error: "รหัสสมาชิกไม่ถูกต้อง",
-    });
-  }
-
-  if (!member) {
-    return res.status(400).json({
-      error: "กรุณาระบุชื่อและอีเมลให้ถูกต้อง",
     });
   }
 
@@ -379,7 +354,7 @@ app.get("/api/loans/overdue", ...adminOnly, async (req, res) => {
 // POST /api/loans
 // ยืมหนังสือ
 // ========================
-app.post("/api/loans", authenticate, async (req, res) => {
+app.post("/api/loans", authenticate, validateBody(loanSchema), async (req, res) => {
   const { book_id, loan_date, due_date } = req.body || {};
   let { member_id } = req.body || {};
 
@@ -467,6 +442,8 @@ app.post("/api/loans", authenticate, async (req, res) => {
     );
 
     await connection.commit();
+    // จำนวนคงเหลือเปลี่ยนแล้ว ล้าง cache รายการหนังสือของ Book API (ใช้ได้เมื่อสองบริการใช้ Redis ร่วมกัน)
+    await cache.invalidate("books:");
 
     return res.status(201).json({
       message: "ยืมหนังสือสำเร็จ",
@@ -563,6 +540,7 @@ app.put("/api/loans/:id/return", authenticate, async (req, res) => {
     );
 
     await connection.commit();
+    await cache.invalidate("books:");
 
     return res.status(200).json({
       message: "คืนหนังสือสำเร็จ",
@@ -590,25 +568,20 @@ app.put("/api/loans/:id/return", authenticate, async (req, res) => {
 });
 
 // ========================
-// JSON parsing error handler
+// 404 และตัวจัดการข้อผิดพลาดกลาง (ต้องอยู่หลังทุก route)
 // ========================
-app.use((error, req, res, next) => {
-  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
-    return res.status(400).json({
-      error: "รูปแบบ JSON ไม่ถูกต้อง",
-    });
-  }
-
-  return next(error);
-});
+app.use(notFound);
+app.use(errorHandler);
 
 // ========================
 // Start server
 // ========================
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Circulation Service running on port ${PORT}`);
-    console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+  cache.connectCache().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Circulation Service running on port ${PORT}`);
+      console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+    });
   });
 }
 

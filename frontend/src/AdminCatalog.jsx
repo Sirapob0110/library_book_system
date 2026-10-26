@@ -22,6 +22,7 @@ export default function AdminCatalog({
   request,
   bookApi,
   books,
+  total,
   loading,
   setLoading,
   showStatus,
@@ -219,7 +220,7 @@ export default function AdminCatalog({
           <h2>จัดการหนังสือ ผู้แต่ง และหมวดหมู่</h2>
         </div>
 
-        <span className="count">{books.length} เล่ม</span>
+        <span className="count">{total} เล่ม</span>
       </div>
 
       <h3>{editing ? `แก้ไขหนังสือ #${editingBookId}` : "เพิ่มหนังสือ"}</h3>
@@ -367,6 +368,10 @@ export default function AdminCatalog({
           </tbody>
         </table>
       </div>
+
+      {total > books.length && (
+        <p className="hint">แสดง {books.length} เล่มแรกจากทั้งหมด {total} เล่ม</p>
+      )}
 
       <h3>ผู้แต่ง ({authors.length})</h3>
 

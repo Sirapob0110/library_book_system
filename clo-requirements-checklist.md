@@ -2,7 +2,7 @@
 
 ## 1. วิธีอ่านเอกสาร
 
-เอกสารนี้ตรวจว่าระบบครอบคลุมข้อกำหนดของ CLO8 (Final Integration), CLO6 (Client-Facing Frontend) และ CLO7 (Project Defense) พร้อมหลักฐานที่ตรวจสอบย้อนกลับได้ในรูป `ไฟล์:บรรทัด` (เลขบรรทัดอ้างอิงจาก commit `2b13cf6` ของ branch `main`)
+เอกสารนี้ตรวจว่าระบบครอบคลุมข้อกำหนดของ CLO8 (Final Integration), CLO6 (Client-Facing Frontend) และ CLO7 (Project Defense) พร้อมหลักฐานที่ตรวจสอบย้อนกลับได้ โดยระบุไฟล์ และชื่อเส้นทาง/ฟังก์ชันที่เกี่ยวข้อง (ไม่ใช้เลขบรรทัดเพราะโค้ดเปลี่ยนบ่อยหลังเพิ่มแล็บ ให้ค้นด้วยชื่อที่ระบุ)
 
 ความหมายของสถานะ
 
@@ -23,24 +23,24 @@
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| รวมโมดูลจาก Phase 1–2 และ Microservices เป็นระบบเดียว | Book API: `src/index.js:498` (`app.listen`, พอร์ต 3000) · Circulation Service: `src/circulation/index.js:609` (`app.listen`, พอร์ต 3001) · ตัวเรียก API ภายนอก: `src/services/external-api.js` · สคริปต์รัน: `package.json` (`start`, `start:circulation`) | `[x]` อ่านโค้ด |
+| รวมโมดูลจาก Phase 1–2 และ Microservices เป็นระบบเดียว | Book API: `src/index.js` (`app.listen`, พอร์ต 3000) · Circulation Service: `src/circulation/index.js` (`app.listen`, พอร์ต 3001) · ตัวเรียก API ภายนอก: `src/services/external-api.js` · สคริปต์รัน: `package.json` (`start`, `start:circulation`) | `[x]` อ่านโค้ด |
 | ไม่มี merge conflict หลงเหลือ | ค้นหา `<<<<<<<`, `=======`, `>>>>>>>` ในไฟล์ `.js .jsx .md .yaml .json .sql` ทั้ง repo (ไม่รวม `node_modules`, `coverage`) ไม่พบ | `[x]` รันค้นหา |
-| ฐานข้อมูลสร้างจาก repo ได้ครบทุกตาราง | `schema.sql:28-29` (`total_copies`, `available_copies`) · `schema.sql:50` (`members`) · `schema.sql:58` (`loans`) · `seed.sql` | `[x]` สร้างฐานข้อมูลใหม่จากไฟล์ทั้งสองแล้วรันบริการทั้งสอง |
-| Book API ทำงานได้ | routes: `src/index.js:119` (GET books) · `:140` (GET book) · `:153` (POST) · `:189` (PUT) · `:243` (DELETE) · `:260` (external-info) · `:276` `:289` `:326` (authors) · `:354` `:367` (categories) | `[x]` รันทดสอบ (`curl` + Jest) |
-| Circulation Service ทำงานได้ | routes: `src/circulation/index.js:100` (health) · `:111` `:135` `:174` `:241` (members) · `:287` (ประวัติยืม) · `:347` (overdue) · `:382` (ยืม) · `:504` (คืน) | `[x]` รันทดสอบ (`curl` + Jest) |
-| การยืมและคืนทำเป็น transaction และล็อกแถว | ยืม: `src/circulation/index.js:417` (begin) · `:436` (`FOR UPDATE`) · `:469` (commit) · rollback `:425` `:441` `:449` `:482` · คืน: `:517` (begin) · `:523` (`FOR UPDATE`) · `:565` (commit) | `[x]` อ่านโค้ด และรันทดสอบ: ยืมแล้วจำนวนเล่มลด, ยืมเกินจำนวนได้ 409, คืนซ้ำได้ 409 |
-| จัดการวันที่ไม่ให้เลื่อนตามเขตเวลา | `src/db.js:15` (`dateStrings: ["DATE"]`) | `[x]` ทดสอบด้วย `TZ=Asia/Bangkok` ได้ `2026-10-10` ตรงกับที่กรอก |
+| ฐานข้อมูลสร้างจาก repo ได้ครบทุกตาราง | `schema.sql` (`total_copies`, `available_copies`) · `schema.sql` (`members`) · `schema.sql` (`loans`) · `seed.sql` | `[x]` สร้างฐานข้อมูลใหม่จากไฟล์ทั้งสองแล้วรันบริการทั้งสอง |
+| Book API ทำงานได้ | routes: `src/index.js` (GET books) · (GET book) · (POST) · (PUT) · (DELETE) · (external-info) · (authors) · (categories) | `[x]` รันทดสอบ (`curl` + Jest) |
+| Circulation Service ทำงานได้ | routes: `src/circulation/index.js` (health) · (members) · (ประวัติยืม) · (overdue) · (ยืม) · (คืน) | `[x]` รันทดสอบ (`curl` + Jest) |
+| การยืมและคืนทำเป็น transaction และล็อกแถว | ยืม: `src/circulation/index.js` (begin) · (`FOR UPDATE`) · (commit) · rollback · คืน: (begin) · (`FOR UPDATE`) · (commit) | `[x]` อ่านโค้ด และรันทดสอบ: ยืมแล้วจำนวนเล่มลด, ยืมเกินจำนวนได้ 409, คืนซ้ำได้ 409 |
+| จัดการวันที่ไม่ให้เลื่อนตามเขตเวลา | `src/db.js` (`dateStrings: ["DATE"]`) | `[x]` ทดสอบด้วย `TZ=Asia/Bangkok` ได้ `2026-10-10` ตรงกับที่กรอก |
 | Book API และ Circulation Service ทำงานพร้อมกับ Frontend ได้ | ดูหัวข้อ 3 | `[ ]` ทดสอบมือตามขั้นตอนในหัวข้อ 5 |
 
 ### 2.2 เอกสาร API ตรงกับโค้ดจริง (Swagger/Code Match)
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| ทุก route ในโค้ดมีใน `openapi.yaml` | โค้ดมี 23 routes (Book API 14 รวม `/api/auth/*` 3 เส้นทาง + Circulation 9) และ `openapi.yaml` มี 23 operations ตรงกันทุกรายการ path ใน spec: `openapi.yaml:43` `:72` `:98` (auth) · `:113` (`/api/books`) · `:164` (`/api/books/{id}`) · `:235` (external-info) · `:256` `:298` (authors) · `:319` (categories) · `:363` (`/health`) · `:380` `:429` `:494` (members) · `:522` (overdue) · `:544` (loans) · `:578` (return) | `[x]` เทียบ route จากโค้ดกับ path ใน spec ด้วยสคริปต์ |
+| ทุก route ในโค้ดมีใน `openapi.yaml` | โค้ดมี 25 routes (Book API 16 รวม `/api/auth/*` 3 เส้นทาง, `/graphql` และ `/health` + Circulation 9 รวม `/health`) และ `openapi.yaml` v1.3.0 มี 24 operations (`/health` ของทั้งสองบริการและ Gateway ใช้ operation เดียวกัน) ตรงกันทุกรายการ path ใน spec: `openapi.yaml:43` (auth) · (`/api/books`) · (`/api/books/{id}`) · (external-info) · (authors) · (categories) · (`/health`) · (members) · (overdue) · (loans) · (return) | `[x]` เทียบ route จากโค้ดกับ path ใน spec ด้วยสคริปต์ |
 | `openapi.yaml` ผ่านการตรวจรูปแบบ | ตรวจด้วย `swagger-cli validate` ผล: valid OpenAPI 3.0.3 (16 paths) และ `src/circulation/openapi.yaml` เหมือนไฟล์ที่รากทุกตัวอักษร | `[x]` รันตรวจ |
 | ระบุการยืนยันตัวตนและสิทธิ์ในสเปก | `securitySchemes.bearerAuth` (JWT) ใช้เป็นค่าตั้งต้นทุกเส้นทาง ยกเว้น login / register / health · ทุกเส้นทางที่ป้องกันมีตัวอย่าง response 401 และเส้นทาง admin / เจ้าของข้อมูลมี 403 · ชื่อเส้นทางที่เฉพาะ admin ระบุ "(เฉพาะ admin)" | `[x]` อ่านสเปก และตรวจใน Swagger UI ได้ว่ามีปุ่ม Authorize |
 | endpoint ของ Circulation ระบุพอร์ตที่ถูกต้อง | `openapi.yaml` กำหนด `servers: http://localhost:3001` ที่ระดับ path ของ members, loans และ health | `[x]` อ่านสเปก |
-| Swagger UI เปิดได้ | Book API: `src/index.js:35` (`/api-docs`, พอร์ต 3000) · Circulation: `src/circulation/index.js:38` (`/api-docs`, พอร์ต 3001) | `[ ]` เปิด http://localhost:3000/api-docs และ http://localhost:3001/api-docs ดูในเบราว์เซอร์ |
+| Swagger UI เปิดได้ | Book API: `src/index.js` (`/api-docs`, พอร์ต 3000) · Circulation: `src/circulation/index.js` (`/api-docs`, พอร์ต 3001) | `[ ]` เปิด http://localhost:3000/api-docs และ http://localhost:3001/api-docs ดูในเบราว์เซอร์ |
 
 ข้อควรระวัง: มีไฟล์ OpenAPI สองฉบับ (`openapi.yaml` ที่ root ใช้ส่งงาน และ `src/circulation/openapi.yaml` ที่ Circulation Service อ่านเอง) ปัจจุบันต่างกันเฉพาะ `operationId` และ `security` หากแก้ฉบับหนึ่งต้องแก้อีกฉบับให้ตรงกัน
 
@@ -49,7 +49,7 @@
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
 | มีชุดทดสอบครอบคลุมทั้งสองบริการ ระบบสิทธิ์ และโมดูลเรียก API ภายนอก | `tests/books.test.js` (40 tests) · `src/circulation/circulation.test.js` (29 tests) · `tests/external-api.test.js` (18 tests: retry, backoff, timeout, fallback) · `tests/auth.test.js` (55 tests: สมัคร, เข้าสู่ระบบ, token, สิทธิ์ Book API) · `src/circulation/circulation-auth.test.js` (24 tests: สิทธิ์ Circulation) | `[x]` รันทดสอบ |
-| ผลทดสอบล่าสุด | Test Suites 5/5 ผ่าน · Tests 166/166 ผ่าน · Statements 92.87% · Branches 86.14% · Functions 92.45% · Lines 92.80% | `[x]` รันในสภาพแวดล้อมของผู้จัดทำเมื่อ 26 ต.ค. 2569 (ผลไม่ขึ้นกับ `.env` เพราะ `tests/setup.js`) · `[ ]` รัน `npm test` บนเครื่องของตนเองแล้วเทียบตัวเลขกับ `coverage-report.md` |
+| ผลทดสอบล่าสุด | Test Suites 11/11 ผ่าน · Tests 305/305 ผ่าน · Statements 95.22% · Branches 91.16% · Functions 94.66% · Lines 95.14% | `[x]` รันในสภาพแวดล้อมของผู้จัดทำเมื่อ 26 ต.ค. 2569 (ผลไม่ขึ้นกับ `.env` เพราะ `tests/setup.js`) · `[ ]` รัน `npm test` บนเครื่องของตนเองแล้วเทียบตัวเลขกับ `coverage-report.md` |
 | ระบุจุดที่ยังไม่มี test | `coverage-report.md` หัวข้อ 6 (บรรทัดที่ไม่ครอบคลุม) และหัวข้อ 5.2 (ไฟล์ที่ไม่ถูกนับ: `db.js`) | `[x]` |
 | รายงานสะท้อนสถานะจริง | ตัวเลข 92.87% นับเฉพาะไฟล์ที่ชุดทดสอบเรียกใช้ เมื่อนับทุกไฟล์ใน `src/` ได้ 92.07% (ต่างกันเพราะ `src/db.js` ไม่ถูกทดสอบ) | `[x]` ระบุไว้ใน `coverage-report.md` หัวข้อ 5.2 |
 
@@ -57,7 +57,7 @@
 
 1. ชุดทดสอบทั้งหมด mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง ส่วนนี้ตรวจแยกด้วย `curl` กับฐานข้อมูลที่สร้างจาก `schema.sql`
 2. `tests/external-api.test.js` จำลอง axios จึงยืนยันตรรกะ retry / timeout / fallback แต่ไม่ได้เรียก Open Library จริง การเรียกจริงและความล้มเหลวของเครือข่ายจริงทดสอบด้วยมือ บันทึกใน `failure-scenario-results.md` และผู้จัดทำตรวจแล้วว่าเทสต์ล้มเมื่อโค้ดถูกแก้ให้ผิด 5 แบบ (`coverage-report.md` หัวข้อ 4.1)
-3. `microservices-design.md` เป็นการออกแบบเป้าหมาย (มี API Gateway และฐานข้อมูลแยก 3 ชุด) ของที่ทำจริงคือ 2 บริการใช้ฐานข้อมูล `book_system` ร่วมกัน และไม่มี API Gateway เหตุผล: การยืมต้องปรับ `books.available_copies` และเพิ่ม `loans` ใน transaction เดียวกัน (`src/circulation/index.js:417-469`)
+3. `microservices-design.md` เป็นการออกแบบเป้าหมาย (มี API Gateway และฐานข้อมูลแยก 3 ชุด) ของที่ทำจริงคือ 2 บริการใช้ฐานข้อมูล `book_system` ร่วมกัน และไม่มี API Gateway เหตุผล: การยืมต้องปรับ `books.available_copies` และเพิ่ม `loans` ใน transaction เดียวกัน (`src/circulation/index.js`)
 4. `postman_collection.json` ครอบคลุม endpoint ของ Book API เท่านั้น (รวมการ login และตรวจสิทธิ์ 401/403) ส่วนของ Circulation Service ทดสอบด้วย Jest `curl` และหน้าเว็บ
 5. ยังไม่มีการทดสอบอัตโนมัติของ Frontend และ `src/db.js` ไม่มี unit test
 6. ระบบยืนยันตัวตนเป็นแบบพื้นฐาน: ไม่มีการจำกัดจำนวนครั้งการเข้าสู่ระบบ (rate limit), ไม่มี refresh token / การเพิกถอน token ก่อนหมดอายุ (2 ชั่วโมง), token เก็บใน `sessionStorage` ของเบราว์เซอร์ และบัญชีตัวอย่างใน `seed.sql` ใช้รหัสผ่านสำหรับสาธิต หากพัฒนาต่อควรเพิ่มสิ่งเหล่านี้และเปลี่ยนรหัสผ่าน
@@ -69,16 +69,30 @@
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
 | ตาราง `users` และบัญชีตัวอย่าง | `schema.sql` (ตาราง `users`: `username` ไม่ซ้ำ, `role` ENUM admin/user, `member_id` เชื่อมกับ `members`) · `seed.sql` (admin 1 บัญชี, user 2 บัญชี) | `[x]` สร้างฐานข้อมูลใหม่จากไฟล์ทั้งสองแล้วเข้าสู่ระบบได้ |
-| เก็บรหัสผ่านเป็น hash | `src/index.js:419` (`bcrypt.hash` cost 10) · เปรียบเทียบด้วย `bcrypt.compare` ที่ `:468` · ไม่มีรหัสผ่านหรือ hash ในผลลัพธ์ API และใน token | `[x]` อ่านโค้ด และรันทดสอบ (`tests/auth.test.js`) |
-| สมัครสมาชิก `POST /api/auth/register` | `src/index.js:414` · ตรวจ username / password / ชื่อ / อีเมล · สร้างสมาชิกและผู้ใช้ในธุรกรรมเดียว · ได้บทบาท user เสมอ (ไม่รับ `role` จากผู้สมัคร) | `[x]` รันทดสอบ: ส่ง `role: admin` มาแล้วได้ user |
-| เข้าสู่ระบบ `POST /api/auth/login` | `src/index.js:453` · ข้อความ 401 เหมือนกันทั้งกรณีไม่พบผู้ใช้และรหัสผ่านผิด (`DUMMY_HASH` `:390` ทำให้เวลาใกล้เคียงกัน) | `[x]` รันทดสอบ |
-| ออกและตรวจ JWT | `src/auth.js:21` (`signToken`, อายุ 2 ชั่วโมง) · `:40` (`authenticate` ตรวจลายเซ็นและวันหมดอายุด้วย `jwt.verify` `:49`) · `:67` (`requireRole`) · ใช้ร่วมกันทั้งสองบริการ | `[x]` รันทดสอบ: token ปลอม, ไม่ใช่ JWT, หมดอายุ ได้ 401 |
-| Book API: ต้องเข้าสู่ระบบ และเขียนข้อมูลได้เฉพาะ admin | อ่าน (`authenticate`): `src/index.js:119` `:140` `:260` `:276` `:326` `:354` · เขียน (`adminOnly` `:16`): `:153` `:189` `:243` `:289` `:367` | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
-| Circulation: admin จัดการสมาชิกและรายการเกินกำหนด | `adminOnly` ที่ `src/circulation/index.js:111` `:135` `:174` `:241` `:347` | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
-| Circulation: user ใช้ได้เฉพาะข้อมูลของตัวเอง | ดูประวัติ `:287-300` (ของคนอื่น 403) · ยืม `:382` (ใช้ `member_id` ของตัวเองเสมอ ส่งของคนอื่น 403 `:391`) · คืน `:504` (รายการของคนอื่น 403 `:539`) | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
+| เก็บรหัสผ่านเป็น hash | `src/index.js` (`bcrypt.hash` cost 10) · เปรียบเทียบด้วย `bcrypt.compare` ที่ · ไม่มีรหัสผ่านหรือ hash ในผลลัพธ์ API และใน token | `[x]` อ่านโค้ด และรันทดสอบ (`tests/auth.test.js`) |
+| สมัครสมาชิก `POST /api/auth/register` | `src/index.js` · ตรวจ username / password / ชื่อ / อีเมล · สร้างสมาชิกและผู้ใช้ในธุรกรรมเดียว · ได้บทบาท user เสมอ (ไม่รับ `role` จากผู้สมัคร) | `[x]` รันทดสอบ: ส่ง `role: admin` มาแล้วได้ user |
+| เข้าสู่ระบบ `POST /api/auth/login` | `src/index.js` · ข้อความ 401 เหมือนกันทั้งกรณีไม่พบผู้ใช้และรหัสผ่านผิด (`DUMMY_HASH` ทำให้เวลาใกล้เคียงกัน) | `[x]` รันทดสอบ |
+| ออกและตรวจ JWT | `src/auth.js` (`signToken`, อายุ 2 ชั่วโมง) · (`authenticate` ตรวจลายเซ็นและวันหมดอายุด้วย `jwt.verify`) · (`requireRole`) · ใช้ร่วมกันทั้งสองบริการ | `[x]` รันทดสอบ: token ปลอม, ไม่ใช่ JWT, หมดอายุ ได้ 401 |
+| Book API: ต้องเข้าสู่ระบบ และเขียนข้อมูลได้เฉพาะ admin | อ่าน (`authenticate`): `src/index.js · เขียน (`adminOnly`): | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
+| Circulation: admin จัดการสมาชิกและรายการเกินกำหนด | `adminOnly` ที่ `src/circulation/index.js | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
+| Circulation: user ใช้ได้เฉพาะข้อมูลของตัวเอง | ดูประวัติ (ของคนอื่น 403) · ยืม (ใช้ `member_id` ของตัวเองเสมอ ส่งของคนอื่น 403) · คืน (รายการของคนอื่น 403) | `[x]` รันทดสอบ (Jest) และเรียกกับฐานข้อมูลจริง |
 | ผลการทดสอบสิทธิ์กับฐานข้อมูลจริง | `auth-test-results.md` (42 กรณี ผ่านทั้งหมด) | `[x]` |
 | ชุดทดสอบด้านสิทธิ์จับข้อผิดพลาดได้จริง | `coverage-report.md` หัวข้อ 4.2 (แก้โค้ดให้ผิด 6 แบบ ทุกแบบถูกจับได้) | `[x]` |
-| CORS จำกัดเฉพาะหน้าเว็บ | `src/index.js:25` และ `src/circulation/index.js:22` (`FRONTEND_ORIGIN`) · `helmet` ทั้งสองบริการ (`src/index.js:21`, `src/circulation/index.js:19`) | `[x]` อ่านโค้ด |
+| CORS จำกัดเฉพาะหน้าเว็บ | `src/index.js` และ `src/circulation/index.js` (`FRONTEND_ORIGIN`) · `helmet` ทั้งสองบริการ (`src/index.js`, `src/circulation/index.js`) | `[x]` อ่านโค้ด |
+
+### 2.6 ส่วนที่เพิ่มตามแล็บ (นำมารวมใน Phase 3)
+
+| แล็บ | สิ่งที่ทำและหลักฐาน | สถานะ |
+|---|---|---|
+| Lab 2 GraphQL | `src/graphql/schema.js`, `src/graphql/index.js` · loader แก้ N+1 (10 เล่ม ใช้ 4 SQL) · mutation เฉพาะ admin · ลึกสุด 5 · ปกปิด error ภายใน · เทียบกับ REST ใน `rest-vs-graphql.md` | `[x]` รันทดสอบ: `tests/graphql.test.js` 37 รายการ + เรียกจริงกับฐานข้อมูลจริง (query, mutation, FORBIDDEN, ลึกเกิน, validation) + Newman |
+| Lab 4 Security | helmet, CORS, morgan, body จำกัด 10KB (413), 404/error handler มาตรฐาน (`src/middlewares/errors.js`) | `[x]` รันทดสอบ: `tests/hardening.test.js`, `tests/errors.test.js` + 413 กับข้อความ 15,000 ตัวอักษรบนระบบจริง |
+| Lab 7 Performance | แบ่งหน้า/เรียง/กรอง (`src/middlewares/query-parser.js`, `src/services/catalog.js`) · cache (`src/cache.js`) · `X-Cache` | `[x]` รันทดสอบ: Jest + Redis จริง: MISS→HIT, ล้างหลังยืมผ่าน Circulation, ล้างหลังเพิ่มหนังสือ, Redis ดับแล้วยังตอบ 200 · sort ที่ไม่ถูกต้องและ `page=abc` ไม่ทำให้ error |
+| Lab 12 Validation | zod (`src/schemas/*`) ตอบ 400 `VALIDATION_ERROR` + `details` · rate limit (`src/middlewares/rate-limiter.js`) | `[x]` รันทดสอบ: Jest + ระบบจริง login ผิด 5 ครั้งแล้วได้ 429 พร้อม header `RateLimit` |
+| Lab 13 Gateway | `src/gateway/index.js` · ตรวจ JWT, ส่งต่อ, timeout 3 วินาที, 503 เมื่อบริการล่ม, log กลาง, health รวม | `[x]` รันทดสอบ: `tests/gateway.test.js` 22 รายการ + ปิด Circulation จริงแล้วเรียกผ่าน Gateway ได้ 503 `SERVICE_UNAVAILABLE` (Book API ยังใช้ได้) ดู `failure-scenario-results.md` ข้อ 8 |
+| Lab 14 Scalability | `scalability-design.md` (คอขวด, สถาปัตยกรรม load balancer, ตารางสิ่งที่ต้องแก้, แผนย้ายระบบ) | `[x]` อ่านเอกสาร · เป็นเอกสารออกแบบ ไม่ได้ทำ load test จริงหรือ Knex migration (เกณฑ์วิชาไม่นับ) |
+| Postman | โฟลเดอร์ "Hardening, Cache, GraphQL, Gateway" ใน `postman_collection.json` | `[x]` รันทดสอบ: Newman 52 requests, 86 assertions ผ่านครบบนฐานข้อมูลใหม่ |
+| ยกเลิกโดยตั้งใจ | การทำ versioning (`/api/v1`) ตัดออกตามที่ตัดสินใจ ไม่อยู่ในโปรเจกต์ | — |
+| ยังไม่ได้ทำ | OWASP ZAP scan, rate limit แยกตามบทบาท, ระบบลืมรหัสผ่าน | `[ ]` ไม่ทำ |
 
 ## 3. CLO6 — Client-Facing Frontend (10 คะแนน)
 
@@ -88,18 +102,18 @@
 
 | การเรียก | หลักฐาน | ประเภท |
 |---|---|---|
-| รายการหนังสือ `GET /api/books` | `frontend/src/App.jsx:189` | GET |
-| รายการสมาชิก `GET /api/members` | `frontend/src/App.jsx:204` | GET |
-| ประวัติการยืม `GET /api/members/{id}/loans` | `frontend/src/App.jsx:218-219` | GET |
-| เพิ่มสมาชิก `POST /api/members` | `frontend/src/App.jsx:281` | POST |
-| แก้ไขสมาชิก `PUT /api/members/{id}` | `frontend/src/App.jsx:333-334` | PUT |
-| ลบสมาชิก `DELETE /api/members/{id}` | `frontend/src/App.jsx:373-374` | DELETE |
-| ยืมหนังสือ `POST /api/loans` | `frontend/src/App.jsx:425` | POST |
-| คืนหนังสือ `PUT /api/loans/{id}/return` | `frontend/src/App.jsx:489-490` | PUT |
+| รายการหนังสือ `GET /api/books` | `frontend/src/App.jsx` | GET |
+| รายการสมาชิก `GET /api/members` | `frontend/src/App.jsx` | GET |
+| ประวัติการยืม `GET /api/members/{id}/loans` | `frontend/src/App.jsx` | GET |
+| เพิ่มสมาชิก `POST /api/members` | `frontend/src/App.jsx` | POST |
+| แก้ไขสมาชิก `PUT /api/members/{id}` | `frontend/src/App.jsx` | PUT |
+| ลบสมาชิก `DELETE /api/members/{id}` | `frontend/src/App.jsx` | DELETE |
+| ยืมหนังสือ `POST /api/loans` | `frontend/src/App.jsx` | POST |
+| คืนหนังสือ `PUT /api/loans/{id}/return` | `frontend/src/App.jsx` | PUT |
 
 | Checklist | สถานะ |
 |---|---|
-| เรียก API จริง 8 รูปแบบ ครบทั้ง GET, POST, PUT, DELETE (ฟังก์ชันกลาง `request` ที่ `App.jsx:144`) | `[x]` อ่านโค้ด · ฝั่งหลังบ้านของ endpoint เหล่านี้ผ่านทั้ง Jest และการเรียกด้วย `curl` (ยกเว้นการแก้ไขและลบสมาชิกที่สำเร็จ ซึ่งผ่าน Jest เท่านั้น) |
+| เรียก API จริง 8 รูปแบบ ครบทั้ง GET, POST, PUT, DELETE (ฟังก์ชันกลาง `request` ที่ `App.jsx`) | `[x]` อ่านโค้ด · ฝั่งหลังบ้านของ endpoint เหล่านี้ผ่านทั้ง Jest และการเรียกด้วย `curl` (ยกเว้นการแก้ไขและลบสมาชิกที่สำเร็จ ซึ่งผ่าน Jest เท่านั้น) |
 | หน้าเว็บทำงานกับ Backend จริงครบทุกขั้น | `[ ]` ทดสอบมือ 5 รายการ: ดูหนังสือ, ดูสมาชิก, เพิ่มสมาชิก, ยืม, คืน |
 | Build ผ่านและไม่มี error จาก lint | `[x]` `vite build` สำเร็จ · `oxlint` 0 errors, 0 warnings |
 
@@ -107,31 +121,31 @@
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| มีสถานะ loading ระหว่างรอ API | state: `App.jsx:84` · แถบแสดงผล: `App.jsx:585-586` (`role="status"`) · ปิดปุ่มระหว่างโหลด: `App.jsx:530` `:756` `:767` `:794` `:803` `:894` `:977` · ทุกฟังก์ชัน reset ใน `finally` เช่น `:249` `:297` `:356` `:400` `:462` `:478` `:512` | `[x]` อ่านโค้ด · `[x]` ยืนยันในเบราว์เซอร์ (เปิดหน้าให้โหลดเสร็จ แล้วตั้ง Slow 3G ใน DevTools → Network แล้วกดปุ่มที่เรียก API เห็นแถบ "กำลังโหลด...") หมายเหตุ: การรีโหลดหน้าตอน Slow 3G เห็นหน้าขาวชั่วคราวเพราะไฟล์ JS ยังโหลดไม่เสร็จ ไม่ใช่สถานะ loading ของแอป |
-| แสดงข้อความ error เมื่อเรียก API ไม่สำเร็จ | แปลง error ที่ `App.jsx:156-181` (เชื่อมต่อไม่ได้ / HTTP status / ข้อความจาก API) · แสดง: `App.jsx:574` (`role="alert"`) · ทุกฟังก์ชันเรียก `showStatus("error", …)` ใน `catch` เช่น `:246` `:295` `:354` `:398` `:460` `:476` `:510` | `[x]` อ่านโค้ด · `[ ]` ยืนยันในเบราว์เซอร์ (ปิด Backend แล้วโหลดหน้า ต้องเห็นข้อความ error สีแดง ไม่ขาวโล่ง) |
-| หน้าไม่ขาวเมื่อไม่ได้ตั้งค่า URL | `App.jsx:7-16` โยน error พร้อมข้อความภาษาไทยเมื่อไม่มี `VITE_BOOK_API_URL` / `VITE_CIRCULATION_API_URL` · ตัวอย่างค่าตั้ง: `frontend/.env.example` | `[x]` อ่านโค้ด · หมายเหตุ: ถ้าไม่มี `.env.local` ข้อความนี้ขึ้นใน console ไม่ใช่บนหน้าเว็บ ต้องคัดลอก `.env.example` เป็น `.env.local` ก่อนรัน |
-| แสดงผลอ่านง่าย (แท็บ, ตาราง, สถานะสรุป) | แท็บ: `App.jsx:28` · การ์ดสรุป: `:549-567` · ตารางประวัติ: `:964-965` | `[ ]` ตรวจสายตาในเบราว์เซอร์ |
-| จัดการกรณีไม่มีข้อมูล | `App.jsx:644` (ไม่มีหนังสือ) | `[x]` อ่านโค้ด |
+| มีสถานะ loading ระหว่างรอ API | state: `App.jsx` · แถบแสดงผล: `App.jsx` (`role="status"`) · ปิดปุ่มระหว่างโหลด: `App.jsx · ทุกฟังก์ชัน reset ใน `finally` เช่น | `[x]` อ่านโค้ด · `[x]` ยืนยันในเบราว์เซอร์ (เปิดหน้าให้โหลดเสร็จ แล้วตั้ง Slow 3G ใน DevTools → Network แล้วกดปุ่มที่เรียก API เห็นแถบ "กำลังโหลด...") หมายเหตุ: การรีโหลดหน้าตอน Slow 3G เห็นหน้าขาวชั่วคราวเพราะไฟล์ JS ยังโหลดไม่เสร็จ ไม่ใช่สถานะ loading ของแอป |
+| แสดงข้อความ error เมื่อเรียก API ไม่สำเร็จ | แปลง error ที่ `App.jsx` (เชื่อมต่อไม่ได้ / HTTP status / ข้อความจาก API) · แสดง: `App.jsx` (`role="alert"`) · ทุกฟังก์ชันเรียก `showStatus("error", …)` ใน `catch` เช่น | `[x]` อ่านโค้ด · `[ ]` ยืนยันในเบราว์เซอร์ (ปิด Backend แล้วโหลดหน้า ต้องเห็นข้อความ error สีแดง ไม่ขาวโล่ง) |
+| หน้าไม่ขาวเมื่อไม่ได้ตั้งค่า URL | `App.jsx` โยน error พร้อมข้อความภาษาไทยเมื่อไม่มี `VITE_BOOK_API_URL` / `VITE_CIRCULATION_API_URL` · ตัวอย่างค่าตั้ง: `frontend/.env.example` | `[x]` อ่านโค้ด · หมายเหตุ: ถ้าไม่มี `.env.local` ข้อความนี้ขึ้นใน console ไม่ใช่บนหน้าเว็บ ต้องคัดลอก `.env.example` เป็น `.env.local` ก่อนรัน |
+| แสดงผลอ่านง่าย (แท็บ, ตาราง, สถานะสรุป) | แท็บ: `App.jsx` · การ์ดสรุป: · ตารางประวัติ: | `[ ]` ตรวจสายตาในเบราว์เซอร์ |
+| จัดการกรณีไม่มีข้อมูล | `App.jsx` (ไม่มีหนังสือ) | `[x]` อ่านโค้ด |
 
 ### 3.3 แบบฟอร์มและการตรวจความถูกต้องเบื้องต้นฝั่ง Frontend
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| แบบฟอร์มสมาชิก (เพิ่ม/แก้ไข) | `App.jsx:711-713` (`<form onSubmit>`) · ช่องชื่อ `required` + `minLength={2}` `:722-723` · ช่องอีเมล `type="email"` `:731` และ `required` `:736` · ช่องโทรศัพท์ `type="tel"` `:744` | `[x]` อ่านโค้ด |
-| แบบฟอร์มยืมหนังสือ | `App.jsx:825` (`onSubmit={borrowBook}`) · `required` ที่ `:833` `:857` `:888` · ช่องวันที่ `type="date"` พร้อม `min` = วันนี้ `:882-884` · ปิดตัวเลือกหนังสือที่หมด `:841` · ปุ่มส่งปิดเมื่อไม่มีหนังสือหรือสมาชิก `:894` | `[x]` อ่านโค้ด |
-| ตรวจก่อนส่งด้วยโค้ด | ข้อมูลไม่ครบ: `App.jsx:415-419` · วันกำหนดคืนย้อนหลัง: `:421-423` | `[x]` อ่านโค้ด |
-| Backend ตรวจซ้ำ (ไม่เชื่อข้อมูลจาก Frontend อย่างเดียว) | อีเมลไม่ถูกต้อง `src/circulation/index.js:43-56` · วันที่ `:71` `:407` · อีเมลซ้ำ 409 `:84` `:156` `:223` | `[x]` รันทดสอบ: อีเมลผิดได้ 400, อีเมลซ้ำได้ 409 |
+| แบบฟอร์มสมาชิก (เพิ่ม/แก้ไข) | `App.jsx` (`<form onSubmit>`) · ช่องชื่อ `required` + `minLength={2}` · ช่องอีเมล `type="email"` และ `required` · ช่องโทรศัพท์ `type="tel"` | `[x]` อ่านโค้ด |
+| แบบฟอร์มยืมหนังสือ | `App.jsx` (`onSubmit={borrowBook}`) · `required` ที่ · ช่องวันที่ `type="date"` พร้อม `min` = วันนี้ · ปิดตัวเลือกหนังสือที่หมด · ปุ่มส่งปิดเมื่อไม่มีหนังสือหรือสมาชิก | `[x]` อ่านโค้ด |
+| ตรวจก่อนส่งด้วยโค้ด | ข้อมูลไม่ครบ: `App.jsx` · วันกำหนดคืนย้อนหลัง: | `[x]` อ่านโค้ด |
+| Backend ตรวจซ้ำ (ไม่เชื่อข้อมูลจาก Frontend อย่างเดียว) | อีเมลไม่ถูกต้อง `src/circulation/index.js` · วันที่ · อีเมลซ้ำ 409 | `[x]` รันทดสอบ: อีเมลผิดได้ 400, อีเมลซ้ำได้ 409 |
 | ทดสอบด้วยข้อมูลที่ไม่ถูกต้องผ่านหน้าเว็บ | | `[x]` ทดสอบมือกับฟอร์มสมาชิก: ชื่อสั้นเกินไปและอีเมลไม่มี `@` ถูกบล็อกพร้อมข้อความเตือน · `[ ]` ยังไม่ได้ทดสอบ: ชื่อเป็นช่องว่างล้วน และฟอร์มยืมหนังสือ |
 
 ### 3.4 หน้าเข้าสู่ระบบและสิทธิ์ตามบทบาทบนหน้าเว็บ
 
 | Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| หน้าเข้าสู่ระบบ / สมัครสมาชิก | `frontend/src/Login.jsx` (ตรวจ username `:3` `:77`, เรียก API `:61` `:97`) · ผู้ที่ยังไม่เข้าสู่ระบบเห็นเฉพาะหน้านี้ (`App.jsx:1010-1027`) | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ (Playwright): รหัสผ่านผิดขึ้นข้อความ, สมัครแล้วเข้าสู่ระบบอัตโนมัติ |
-| แนบ token ทุกคำขอ และจัดการ 401 | `App.jsx:152` (`Authorization: Bearer`) · `:165` (401 กลับหน้าเข้าสู่ระบบพร้อมข้อความ) · เก็บ session ใน `sessionStorage` `:39-54` | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์: token ไม่ถูกต้องกลับหน้า login |
-| แยกหน้าตาตามบทบาท | `App.jsx:71` (`isAdmin`) · user ไม่มีแท็บสมาชิก (`:75` `:599` `:700`) · ฟอร์มยืมของ user ใช้สมาชิกของตัวเอง (`:415` `:850`) · user เห็นเฉพาะประวัติของตัวเอง (`:918`) · ป้ายบทบาทและปุ่มออกจากระบบ (`:530`) | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ทั้ง admin และ user |
-| ออกจากระบบ | ปุ่ม "ออกจากระบบ" ล้าง `sessionStorage` (`App.jsx:53-54`) | `[x]` ทดสอบในเบราว์เซอร์ |
-| admin จัดการข้อมูลผ่านหน้าเว็บ (หนังสือ เพิ่ม/แก้ไข/ลบ · ผู้แต่ง · หมวดหมู่ · รายการเกินกำหนด) | แท็บ `App.jsx:601` (แสดงเฉพาะ admin) · `App.jsx:687-698` · ฟอร์ม/ตาราง/ลบ: `frontend/src/AdminCatalog.jsx` · รายการเกินกำหนด `AdminCatalog.jsx` (`OverdueLoans`) ใช้ที่ `App.jsx:937` | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ (Playwright กับฐานข้อมูลจริง): เพิ่มผู้แต่ง/หมวดหมู่/หนังสือ, แก้ไข, ลบ, ISBN ซ้ำขึ้นข้อความ error, user ไม่เห็นแท็บ |
+| หน้าเข้าสู่ระบบ / สมัครสมาชิก | `frontend/src/Login.jsx` (ตรวจ username, เรียก API, สมัครเสร็จกลับหน้าเข้าสู่ระบบ) · ผู้ที่ยังไม่เข้าสู่ระบบเห็นเฉพาะหน้านี้ (`App.jsx`) | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ (Playwright): รหัสผ่านผิดขึ้นข้อความ, สมัครสำเร็จแล้วกลับหน้าเข้าสู่ระบบพร้อมใส่ username ให้ และเข้าสู่ระบบด้วยบัญชีใหม่ได้ |
+| แนบ token ทุกคำขอ และจัดการ 401 | `App.jsx` (`Authorization: Bearer`) · (401 กลับหน้าเข้าสู่ระบบพร้อมข้อความ) · เก็บ session ใน `sessionStorage` | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์: token ไม่ถูกต้องกลับหน้า login |
+| แยกหน้าตาตามบทบาท | `App.jsx` (`isAdmin`) · user ไม่มีแท็บสมาชิก () · ฟอร์มยืมของ user ใช้สมาชิกของตัวเอง () · user เห็นเฉพาะประวัติของตัวเอง () · ป้ายบทบาทและปุ่มออกจากระบบ () | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ทั้ง admin และ user |
+| ออกจากระบบ | ปุ่ม "ออกจากระบบ" ล้าง `sessionStorage` (`App.jsx`) | `[x]` ทดสอบในเบราว์เซอร์ |
+| admin จัดการข้อมูลผ่านหน้าเว็บ (หนังสือ เพิ่ม/แก้ไข/ลบ · ผู้แต่ง · หมวดหมู่ · รายการเกินกำหนด) | แท็บ `App.jsx` (แสดงเฉพาะ admin) · `App.jsx` · ฟอร์ม/ตาราง/ลบ: `frontend/src/AdminCatalog.jsx` · รายการเกินกำหนด `AdminCatalog.jsx` (`OverdueLoans`) ใช้ที่ `App.jsx` | `[x]` อ่านโค้ด · `[x]` ทดสอบในเบราว์เซอร์ (Playwright กับฐานข้อมูลจริง): เพิ่มผู้แต่ง/หมวดหมู่/หนังสือ, แก้ไข, ลบ, ISBN ซ้ำขึ้นข้อความ error, user ไม่เห็นแท็บ |
 | ทดสอบด้วยมือบนเครื่องของผู้จัดทำ | ลำดับ: เข้าสู่ระบบด้วย `somchai` แล้วยืม/คืนหนังสือ → ออกจากระบบ → เข้าสู่ระบบด้วย `admin` ดูแท็บสมาชิก | `[ ]` ทดสอบมือและจับภาพหน้าจอ |
 
 ## 4. CLO7 — Project Defense (5 คะแนน)
@@ -168,8 +182,8 @@
 |---|---|
 | ทำไมแยก 2 บริการทั้งที่ใช้ฐานข้อมูลเดียว | แยกความรับผิดชอบ (แคตตาล็อก vs การยืมคืน) ให้พัฒนา ทดสอบ และรันแยกกันได้ ใช้ฐานข้อมูลร่วมเพราะการยืมต้องอัปเดต `books.available_copies` และเพิ่ม `loans` ในธุรกรรมเดียวกัน ถ้าแยกฐานข้อมูลต้องจัดการ distributed transaction ซึ่งเกินขอบเขตงานนี้ |
 | `microservices-design.md` มี API Gateway ทำไมของจริงไม่มี | เอกสารนั้นเป็นแบบเป้าหมาย ของที่ทำจริงคือ 2 บริการ ไม่มี Gateway และฐานข้อมูลเดียว |
-| ยืมหนังสือพร้อมกัน 2 คนจะเกิดอะไร | ใช้ transaction กับ `SELECT … FOR UPDATE` (`src/circulation/index.js:417`, `:436`) คนที่สองรอจนคนแรกเสร็จ แล้วเห็นจำนวนล่าสุด ถ้าหมดได้ 409 |
-| ทำไมวันที่ถึงต้องตั้ง `dateStrings` | `mysql2` แปลง `DATE` เป็น `Date` ของ JavaScript ตามเขตเวลา ทำให้เครื่องที่เป็น UTC+7 แสดงวันที่ถอยหลัง 1 วัน (`src/db.js:15`) |
+| ยืมหนังสือพร้อมกัน 2 คนจะเกิดอะไร | ใช้ transaction กับ `SELECT … FOR UPDATE` (`src/circulation/index.js`,) คนที่สองรอจนคนแรกเสร็จ แล้วเห็นจำนวนล่าสุด ถ้าหมดได้ 409 |
+| ทำไมวันที่ถึงต้องตั้ง `dateStrings` | `mysql2` แปลง `DATE` เป็น `Date` ของ JavaScript ตามเขตเวลา ทำให้เครื่องที่เป็น UTC+7 แสดงวันที่ถอยหลัง 1 วัน (`src/db.js`) |
 | ถ้า Open Library ล่มเกิดอะไร | ลอง 3 ครั้ง (รอ 300 ms แล้ว 600 ms) timeout 3 วินาทีต่อครั้ง ไม่ retry เมื่อได้ 4xx แล้วตอบ HTTP 200 พร้อม `source: "fallback"` และข้อมูลหนังสือในระบบ (`src/services/external-api.js`) |
 | Coverage 90% แปลว่าไม่มีบั๊กไหม | ไม่ใช่ แปลว่าโค้ดส่วนนั้นถูกเรียกขณะทดสอบ และชุดทดสอบ mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง (ส่วนสิทธิ์ตรวจกับฐานข้อมูลจริงแยกอีก 42 กรณี) เมื่อนับทุกไฟล์ใน `src/` (รวม `db.js` ที่ไม่ถูกทดสอบ) ได้ 92.07% |
 | ระบบสิทธิ์ทำงานอย่างไร | login ได้ JWT (อายุ 2 ชั่วโมง) ที่มี `role` และ `member_id` ทุกคำขอต้องแนบ `Authorization: Bearer` middleware `authenticate` ตรวจลายเซ็นและวันหมดอายุ แล้ว `requireRole("admin")` ใช้กับเส้นทางที่ต้องเป็น admin ส่วนเส้นทางของ user ตรวจว่าเป็นข้อมูลของตัวเอง (`member_id` ใน token ตรงกับข้อมูล) ได้ 401 ถ้าไม่ได้เข้าสู่ระบบ และ 403 ถ้าไม่มีสิทธิ์ |
@@ -193,11 +207,10 @@ C:\xampp\mysql\bin\mysql.exe -u root --default-character-set=utf8mb4 < seed.sql
 npm test
 ```
 
-เปิดอีก 3 หน้าต่าง
+เปิดอีก 2 หน้าต่าง (`start:all` เปิด Book API, Circulation และ Gateway พร้อมกัน)
 
 ```cmd
-npm start
-npm run start:circulation
+npm run start:all
 cd frontend && npm install && copy .env.example .env.local && npm run dev
 ```
 
@@ -207,13 +220,13 @@ cd frontend && npm install && copy .env.example .env.local && npm run dev
 
 CLO8
 
-- [ ] รัน `npm install` แล้ว `npm test` บนเครื่องตนเองผ่าน 166/166 และตัวเลขตรงกับ `coverage-report.md` (ติดตั้งใหม่เพราะมีแพ็กเกจเพิ่ม: `bcryptjs`, `jsonwebtoken`)
+- [ ] รัน `npm install` แล้ว `npm test` บนเครื่องตนเองผ่าน 305/305 และตัวเลขตรงกับ `coverage-report.md` (ติดตั้งใหม่เพราะมีแพ็กเกจเพิ่ม: `express-rate-limit`, `zod`, `redis`, `graphql`)
 - [x] ไม่มี merge conflict หลงเหลือ
-- [x] route ในโค้ดตรงกับ `openapi.yaml` ครบ 23 รายการ และ `src/circulation/openapi.yaml` เหมือนไฟล์ที่ราก
+- [x] route ในโค้ดตรงกับ `openapi.yaml` ครบ 24 operations และ `src/circulation/openapi.yaml` เหมือนไฟล์ที่ราก
 - [x] เข้าสู่ระบบ/สิทธิ์ admin และ user ทำงานถูกต้อง (`auth-test-results.md` 42 กรณี และ Jest)
 - [ ] โหลด `schema.sql` และ `seed.sql` ใหม่บนเครื่องตนเอง (ตาราง `users` เพิ่มขึ้น) แล้วเข้าสู่ระบบได้ทั้ง admin และ user
 - [ ] โคลนใหม่แล้วรันครบทั้ง 3 บริการได้ (หัวข้อ 5.1)
-- [x] เปิด Swagger UI ทั้งพอร์ต 3000 และ 3001 ได้
+- [x] เปิด Swagger UI ทั้งพอร์ต 3000 และ 3001 ได้ และ `npm run start:all` เปิดครบ 3 บริการ (ทดสอบแล้วกับฐานข้อมูลจริง)
 
 CLO6
 

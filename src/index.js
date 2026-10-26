@@ -11,28 +11,45 @@ const YAML = require("yamljs");
 const pool = require("./db");
 const { lookupBookByIsbn } = require("./services/external-api");
 const { signToken, authenticate, requireRole } = require("./auth");
+const catalog = require("./services/catalog");
+const { generalLimiter, loginLimiter, registerLimiter } = require("./middlewares/rate-limiter");
+const { notFound, errorHandler } = require("./middlewares/errors");
+const { validateBody } = require("./schemas/validate");
+const { bookSchema, authorSchema, categorySchema } = require("./schemas/catalog");
+const { registerSchema, loginSchema } = require("./schemas/user");
+const { graphqlHandler } = require("./graphql");
 
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 const adminOnly = [authenticate, requireRole("admin")];
 
 const app = express();
 
-// ---------- Middleware ----------
+// อยู่หลัง proxy/gateway 1 ชั้น ให้ rate limit นับ IP ของผู้ใช้จริงจาก X-Forwarded-For
+app.set("trust proxy", 1);
+
+// ---------- Middleware (ลำดับสำคัญ: เรียงจากบนลงล่าง) ----------
 app.use(helmet());
-if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 app.use(
   cors({
     origin: FRONTEND_ORIGIN,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+app.use(express.json({ limit: "10kb" })); // ข้อมูลเกิน 10KB ตอบ 413
 
-app.use(express.json());
+// ---------- Health check (ใช้โดย Gateway และเครื่องมือเฝ้าระวัง) ----------
+app.get("/health", (req, res) => {
+  res.status(200).json({ service: "book-api", status: "ok" });
+});
 
 // ---------- Swagger UI ----------
 const openapiDoc = YAML.load(path.join(__dirname, "..", "openapi.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiDoc));
+
+// ทุก route ด้านล่างนับโควตา 100 คำขอต่อนาทีต่อ IP (Swagger UI ไม่นับ)
+app.use(generalLimiter);
 
 // ---------- Helpers ----------
 const ok = (res, data, status = 200) =>
@@ -54,83 +71,22 @@ function handleDbError(res, err) {
   return fail(res, 500, "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์");
 }
 
-function validateBook(body) {
-  const { title, isbn, author_id, published_year, price } = body || {};
-
-  if (!title || typeof title !== "string") return "title จำเป็นต้องระบุ";
-  if (!isbn || typeof isbn !== "string") return "isbn จำเป็นต้องระบุ";
-  if (!Number.isInteger(author_id)) return "author_id ต้องเป็นจำนวนเต็ม";
-
-  if (
-    published_year !== undefined &&
-    published_year !== null &&
-    !Number.isInteger(published_year)
-  ) {
-    return "published_year ต้องเป็นจำนวนเต็ม";
-  }
-
-  if (price !== undefined && (typeof price !== "number" || price < 0)) {
-    return "price ต้องเป็นตัวเลขที่ไม่ติดลบ";
-  }
-
-  if (
-    body.category_ids !== undefined &&
-    !(
-      Array.isArray(body.category_ids) &&
-      body.category_ids.every(Number.isInteger)
-    )
-  ) {
-    return "category_ids ต้องเป็นอาร์เรย์ของจำนวนเต็ม";
-  }
-
-  return null;
-}
-
-// 2. แก้ไข getBookDetail เพิ่ม total_copies และ available_copies
-async function getBookDetail(id) {
-  const [rows] = await pool.query(
-    `SELECT b.book_id, b.title, b.isbn,
-            b.published_year, b.price,
-            b.total_copies, b.available_copies,
-            a.author_id, a.name AS author_name, a.nationality
-     FROM books b
-     JOIN authors a ON b.author_id = a.author_id
-     WHERE b.book_id = ?`,
-    [id],
-  );
-
-  if (rows.length === 0) return null;
-
-  const [cats] = await pool.query(
-    `SELECT c.category_id, c.name
-     FROM book_categories bc
-     JOIN categories c ON bc.category_id = c.category_id
-     WHERE bc.book_id = ?
-     ORDER BY c.category_id`,
-    [id],
-  );
-
-  return { ...rows[0], categories: cats };
-}
-
 // ---------- Books ----------
 
-// 1) รายการหนังสือ (ค้นหาด้วย ?q= ชื่อเรื่องหรือชื่อผู้แต่ง)
+// 1) รายการหนังสือ: ค้นหา กรอง เรียง แบ่งหน้า
+//    ?q= ชื่อเรื่องหรือผู้แต่ง · ?author_id= · ?category_id= · ?available=true
+//    ?sort=id|title|published_year|price|available_copies · ?order=asc|desc · ?page= · ?limit= (สูงสุด 100)
 app.get("/api/books", authenticate, async (req, res) => {
   try {
-    const q = req.query.q ? `%${req.query.q}%` : null;
+    const { value, source } = await catalog.loadBookList(req.query);
 
-    const sql = `SELECT b.book_id, b.title, b.isbn,
-                        b.published_year, b.price,
-                        b.total_copies, b.available_copies,
-                        a.author_id, a.name AS author_name
-                 FROM books b
-                 JOIN authors a ON b.author_id = a.author_id
-                 ${q ? "WHERE b.title LIKE ? OR a.name LIKE ?" : ""}
-                 ORDER BY b.book_id`;
-
-    const [rows] = await pool.query(sql, q ? [q, q] : []);
-    ok(res, rows);
+    res.set("X-Cache", source === "cache" ? "HIT" : "MISS");
+    res.json({
+      success: true,
+      data: value.rows,
+      pagination: value.pagination,
+      source,
+    });
   } catch (err) {
     handleDbError(res, err);
   }
@@ -139,7 +95,7 @@ app.get("/api/books", authenticate, async (req, res) => {
 // 2) รายละเอียดหนังสือ
 app.get("/api/books/:id", authenticate, async (req, res) => {
   try {
-    const book = await getBookDetail(req.params.id);
+    const book = await catalog.getBookDetail(req.params.id);
 
     if (!book) return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
 
@@ -149,104 +105,32 @@ app.get("/api/books/:id", authenticate, async (req, res) => {
   }
 });
 
-// 3) เพิ่มหนังสือ (transaction)
-app.post("/api/books", ...adminOnly, async (req, res) => {
-  const error = validateBook(req.body);
-  if (error) return fail(res, 400, error);
-
-  const { title, isbn, author_id, published_year, price, category_ids } =
-    req.body;
-  const conn = await pool.getConnection();
-
+// 3) เพิ่มหนังสือ (transaction ใน services/catalog.js)
+app.post("/api/books", ...adminOnly, validateBody(bookSchema), async (req, res) => {
   try {
-    await conn.beginTransaction();
-
-    const [result] = await conn.query(
-      `INSERT INTO books
-       (title, isbn, author_id, published_year, price)
-       VALUES (?, ?, ?, ?, ?)`,
-      [title, isbn, author_id, published_year ?? null, price ?? 0],
-    );
-
-    if (category_ids && category_ids.length) {
-      await conn.query(
-        `INSERT INTO book_categories (book_id, category_id) VALUES ?`,
-        [category_ids.map((c) => [result.insertId, c])],
-      );
-    }
-
-    await conn.commit();
-    ok(res, await getBookDetail(result.insertId), 201);
+    ok(res, await catalog.createBook(req.body), 201);
   } catch (err) {
-    await conn.rollback();
     handleDbError(res, err);
-  } finally {
-    conn.release();
   }
 });
 
 // 4) แก้ไขหนังสือ
-app.put("/api/books/:id", ...adminOnly, async (req, res) => {
-  const error = validateBook(req.body);
-  if (error) return fail(res, 400, error);
-
-  const { title, isbn, author_id, published_year, price, category_ids } =
-    req.body;
-  const conn = await pool.getConnection();
-
+app.put("/api/books/:id", ...adminOnly, validateBody(bookSchema), async (req, res) => {
   try {
-    await conn.beginTransaction();
+    const book = await catalog.updateBook(req.params.id, req.body);
 
-    const [result] = await conn.query(
-      `UPDATE books
-       SET title = ?, isbn = ?, author_id = ?, published_year = ?, price = ?
-       WHERE book_id = ?`,
-      [
-        title,
-        isbn,
-        author_id,
-        published_year ?? null,
-        price ?? 0,
-        req.params.id,
-      ],
-    );
+    if (!book) return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
 
-    if (result.affectedRows === 0) {
-      await conn.rollback();
-      return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
-    }
-
-    if (category_ids !== undefined) {
-      await conn.query(`DELETE FROM book_categories WHERE book_id = ?`, [
-        req.params.id,
-      ]);
-
-      if (category_ids.length) {
-        await conn.query(
-          `INSERT INTO book_categories (book_id, category_id) VALUES ?`,
-          [category_ids.map((c) => [Number(req.params.id), c])],
-        );
-      }
-    }
-
-    await conn.commit();
-    ok(res, await getBookDetail(req.params.id));
+    ok(res, book);
   } catch (err) {
-    await conn.rollback();
     handleDbError(res, err);
-  } finally {
-    conn.release();
   }
 });
 
 // 5) ลบหนังสือ
 app.delete("/api/books/:id", ...adminOnly, async (req, res) => {
   try {
-    const [result] = await pool.query("DELETE FROM books WHERE book_id = ?", [
-      req.params.id,
-    ]);
-
-    if (result.affectedRows === 0) {
+    if (!(await catalog.deleteBook(req.params.id))) {
       return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
     }
 
@@ -259,7 +143,7 @@ app.delete("/api/books/:id", ...adminOnly, async (req, res) => {
 // 6) ข้อมูลเพิ่มเติมจาก API ภายนอก (Open Library)
 app.get("/api/books/:id/external-info", authenticate, async (req, res) => {
   try {
-    const book = await getBookDetail(req.params.id);
+    const book = await catalog.getBookDetail(req.params.id);
 
     if (!book) return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
 
@@ -272,51 +156,22 @@ app.get("/api/books/:id/external-info", authenticate, async (req, res) => {
 
 // ---------- Authors ----------
 
-// 7) รายการผู้แต่ง
+// 7) รายการผู้แต่ง (cache 5 นาที ล้างเมื่อเพิ่มผู้แต่ง)
 app.get("/api/authors", authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT author_id, name, nationality, birth_year FROM authors ORDER BY name",
-    );
+    const { value, source } = await catalog.listAuthors();
 
-    ok(res, rows);
+    res.set("X-Cache", source === "cache" ? "HIT" : "MISS");
+    res.json({ success: true, data: value, source });
   } catch (err) {
     handleDbError(res, err);
   }
 });
 
 // 8) เพิ่มผู้แต่ง
-app.post("/api/authors", ...adminOnly, async (req, res) => {
-  const { name, nationality, birth_year } = req.body || {};
-
-  if (!name || typeof name !== "string") {
-    return fail(res, 400, "name จำเป็นต้องระบุ");
-  }
-
-  if (
-    birth_year !== undefined &&
-    birth_year !== null &&
-    !Number.isInteger(birth_year)
-  ) {
-    return fail(res, 400, "birth_year ต้องเป็นจำนวนเต็ม");
-  }
-
+app.post("/api/authors", ...adminOnly, validateBody(authorSchema), async (req, res) => {
   try {
-    const [result] = await pool.query(
-      "INSERT INTO authors (name, nationality, birth_year) VALUES (?, ?, ?)",
-      [name, nationality ?? null, birth_year ?? null],
-    );
-
-    ok(
-      res,
-      {
-        author_id: result.insertId,
-        name,
-        nationality: nationality ?? null,
-        birth_year: birth_year ?? null,
-      },
-      201,
-    );
+    ok(res, await catalog.createAuthor(req.body), 201);
   } catch (err) {
     handleDbError(res, err);
   }
@@ -350,71 +205,33 @@ app.get("/api/authors/:id/books", authenticate, async (req, res) => {
 
 // ---------- Categories ----------
 
-// 10) รายการหมวดหมู่
+// 10) รายการหมวดหมู่ (cache 5 นาที ล้างเมื่อเพิ่มหมวดหมู่)
 app.get("/api/categories", authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT category_id, name FROM categories ORDER BY name",
-    );
+    const { value, source } = await catalog.listCategories();
 
-    ok(res, rows);
+    res.set("X-Cache", source === "cache" ? "HIT" : "MISS");
+    res.json({ success: true, data: value, source });
   } catch (err) {
     handleDbError(res, err);
   }
 });
 
 // 11) เพิ่มหมวดหมู่
-app.post("/api/categories", ...adminOnly, async (req, res) => {
-  const { name } = req.body || {};
-
-  if (!name || typeof name !== "string") {
-    return fail(res, 400, "name จำเป็นต้องระบุ");
-  }
-
+app.post("/api/categories", ...adminOnly, validateBody(categorySchema), async (req, res) => {
   try {
-    const [result] = await pool.query(
-      "INSERT INTO categories (name) VALUES (?)",
-      [name],
-    );
-
-    ok(res, { category_id: result.insertId, name }, 201);
+    ok(res, await catalog.createCategory(req.body), 201);
   } catch (err) {
     handleDbError(res, err);
   }
 });
 
 // ---------- Auth (สมัครสมาชิก / เข้าสู่ระบบ) ----------
-const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // hash สำหรับเทียบเมื่อไม่พบผู้ใช้ เพื่อให้เวลาตอบใกล้เคียงกรณีรหัสผ่านผิด
 const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 10);
 
-function validateRegister(body) {
-  const { username, password, name, email, phone } = body || {};
-
-  if (typeof username !== "string" || !USERNAME_RE.test(username)) {
-    return "username ต้องยาว 3-30 ตัวอักษร ใช้ได้เฉพาะ A-Z a-z 0-9 และ _";
-  }
-  if (typeof password !== "string" || password.length < 8 || password.length > 72) {
-    return "password ต้องยาว 8-72 ตัวอักษร";
-  }
-  if (typeof name !== "string" || name.trim().length < 2) {
-    return "name ต้องมีอย่างน้อย 2 ตัวอักษร";
-  }
-  if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
-    return "email ไม่ถูกต้อง";
-  }
-  if (phone !== undefined && phone !== null && phone !== "" && typeof phone !== "string") {
-    return "phone ต้องเป็นข้อความ";
-  }
-  return null;
-}
-
 // สมัครสมาชิก: สร้างสมาชิกห้องสมุดและบัญชีผู้ใช้ (บทบาท user เสมอ) ในธุรกรรมเดียวกัน
-app.post("/api/auth/register", async (req, res) => {
-  const error = validateRegister(req.body);
-  if (error) return fail(res, 400, error);
-
+app.post("/api/auth/register", registerLimiter, validateBody(registerSchema), async (req, res) => {
   const { username, password, name, email, phone } = req.body;
   const passwordHash = await bcrypt.hash(password, 10);
   let conn;
@@ -450,12 +267,8 @@ app.post("/api/auth/register", async (req, res) => {
 });
 
 // เข้าสู่ระบบ: ตรวจรหัสผ่านแล้วออก JWT
-app.post("/api/auth/login", async (req, res) => {
-  const { username, password } = req.body || {};
-
-  if (typeof username !== "string" || typeof password !== "string" || !username || !password) {
-    return fail(res, 400, "กรุณาระบุ username และ password");
-  }
+app.post("/api/auth/login", loginLimiter, validateBody(loginSchema), async (req, res) => {
+  const { username, password } = req.body;
 
   try {
     const [rows] = await pool.query(
@@ -491,13 +304,22 @@ app.get("/api/auth/me", authenticate, (req, res) => {
   ok(res, req.user);
 });
 
+// ---------- GraphQL (Lab 2): เรียกด้วย POST /graphql ต้องเข้าสู่ระบบ ----------
+app.post("/graphql", authenticate, graphqlHandler);
+
+// ---------- 404 และตัวจัดการข้อผิดพลาด (ต้องอยู่หลังทุก route) ----------
+app.use(notFound);
+app.use(errorHandler);
+
 // ---------- Start ----------
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Book API: http://localhost:${PORT}`);
-    console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+  require("./cache").connectCache().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Book API: http://localhost:${PORT}`);
+      console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+    });
   });
 }
 

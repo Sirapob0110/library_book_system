@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "start:circulation": "node src/circulation/index.js",
+    "start:gateway": "node src/gateway/index.js",
+    "start:all": "node scripts/start-all.js",
     "test": "jest --coverage --runInBand"
   },
   "dependencies": {
@@ -14,13 +16,17 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.5.1",
+    "graphql": "^16.14.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.12.1",
     "mysql2": "^3.10.0",
+    "redis": "^4.7.1",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.9.1",
-    "yamljs": "^0.3.0"
+    "yamljs": "^0.3.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "jest": "^30.5.2",
@@ -33,6 +39,9 @@
     "coveragePathIgnorePatterns": [
       "/node_modules/",
       "/tests/"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup-after-env.js"
     ]
   }
 }
