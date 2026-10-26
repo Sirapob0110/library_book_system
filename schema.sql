@@ -25,6 +25,8 @@ CREATE TABLE books (
   published_year SMALLINT,
   price          DECIMAL(10,2) DEFAULT 0.00,
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  total_copies     INT NOT NULL DEFAULT 1,
+  available_copies INT NOT NULL DEFAULT 1,
   CONSTRAINT uq_books_isbn UNIQUE (isbn),
   CONSTRAINT fk_books_author FOREIGN KEY (author_id) REFERENCES authors(author_id)
     ON DELETE CASCADE ON UPDATE CASCADE
@@ -42,3 +44,24 @@ CREATE TABLE book_categories (
 
 CREATE INDEX idx_books_title ON books(title);
 CREATE INDEX idx_authors_name ON authors(name);
+
+-- ===== Circulation Service (members, loans) =====
+-- โครงสร้างตรงกับฐานข้อมูลที่ใช้พัฒนาจริง (ตรวจจาก SHOW CREATE TABLE)
+CREATE TABLE members (
+  member_id INT AUTO_INCREMENT PRIMARY KEY,
+  name      VARCHAR(150) NOT NULL,
+  email     VARCHAR(150) NOT NULL,
+  phone     VARCHAR(20) DEFAULT NULL,
+  UNIQUE KEY email (email)
+) ENGINE=InnoDB;
+
+CREATE TABLE loans (
+  loan_id     INT AUTO_INCREMENT PRIMARY KEY,
+  book_id     INT NOT NULL,
+  member_id   INT NOT NULL,
+  loan_date   DATE NOT NULL,
+  due_date    DATE NOT NULL,
+  return_date DATE DEFAULT NULL,
+  CONSTRAINT fk_loans_book   FOREIGN KEY (book_id)   REFERENCES books(book_id),
+  CONSTRAINT fk_loans_member FOREIGN KEY (member_id) REFERENCES members(member_id)
+) ENGINE=InnoDB;

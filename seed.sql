@@ -14,3 +14,11 @@ INSERT INTO books (title, isbn, author_id, published_year, price) VALUES
 ('บันทึกจากลูกผู้ชาย','9789742350123',1,2003,180.00);
 INSERT INTO book_categories (book_id, category_id) VALUES
 (1,1),(2,1),(2,2),(3,1),(3,2),(3,4),(4,1),(4,2),(4,4),(5,1),(6,3);
+
+-- จำนวนเล่มสำหรับสาธิตระบบยืม-คืน (หนังสือที่ไม่ได้ระบุจะมี 1 เล่มตามค่า default)
+UPDATE books SET total_copies = 3, available_copies = 3 WHERE book_id IN (1,2,3,4);
+UPDATE books SET total_copies = 2, available_copies = 2 WHERE book_id IN (5,6);
+
+INSERT INTO members (name, email, phone) VALUES
+('สมชาย ใจดี','somchai@example.com','0812345678'),
+('สมหญิง รักเรียน','somying@example.com',NULL);
