@@ -65,3 +65,18 @@ CREATE TABLE loans (
   CONSTRAINT fk_loans_book   FOREIGN KEY (book_id)   REFERENCES books(book_id),
   CONSTRAINT fk_loans_member FOREIGN KEY (member_id) REFERENCES members(member_id)
 ) ENGINE=InnoDB;
+
+-- ===== Authentication (ผู้ใช้ระบบ: admin / user) =====
+-- สมัครผ่านหน้าเว็บจะได้บทบาท user และผูกกับสมาชิกห้องสมุด (members) ของตัวเอง
+-- บัญชี admin สร้างจาก seed.sql เท่านั้น
+CREATE TABLE users (
+  user_id       INT AUTO_INCREMENT PRIMARY KEY,
+  username      VARCHAR(50)  NOT NULL,
+  password_hash VARCHAR(100) NOT NULL,
+  role          ENUM('admin','user') NOT NULL DEFAULT 'user',
+  member_id     INT DEFAULT NULL,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_users_username (username),
+  CONSTRAINT fk_users_member FOREIGN KEY (member_id) REFERENCES members(member_id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;

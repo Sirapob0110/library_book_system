@@ -6,15 +6,24 @@ const path = require("path");
 const YAML = require("yaml");
 const swaggerUi = require("swagger-ui-express");
 const db = require("../db");
+const { authenticate, requireRole, deny } = require("../auth");
 
 const app = express();
 const PORT = Number(process.env.CIRCULATION_PORT) || 3001;
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const adminOnly = [authenticate, requireRole("admin")];
 
 // ========================
 // Middleware
 // ========================
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: FRONTEND_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
 app.use(morgan("dev"));
 
@@ -99,7 +108,7 @@ app.get("/health", (req, res) => {
 // GET /api/members
 // ดึงรายชื่อสมาชิก
 // ========================
-app.get("/api/members", async (req, res) => {
+app.get("/api/members", ...adminOnly, async (req, res) => {
   try {
     const [members] = await db.query(
       `SELECT member_id, name, email, phone
@@ -123,7 +132,7 @@ app.get("/api/members", async (req, res) => {
 // POST /api/members
 // เพิ่มสมาชิก
 // ========================
-app.post("/api/members", async (req, res) => {
+app.post("/api/members", ...adminOnly, async (req, res) => {
   const member = getMemberInput(req.body);
 
   if (!member) {
@@ -162,7 +171,7 @@ app.post("/api/members", async (req, res) => {
 // PUT /api/members/:id
 // แก้ไขข้อมูลสมาชิก
 // ========================
-app.put("/api/members/:id", async (req, res) => {
+app.put("/api/members/:id", ...adminOnly, async (req, res) => {
   const memberId = Number(req.params.id);
   const member = getMemberInput(req.body);
 
@@ -229,7 +238,7 @@ app.put("/api/members/:id", async (req, res) => {
 // DELETE /api/members/:id
 // ลบสมาชิก
 // ========================
-app.delete("/api/members/:id", async (req, res) => {
+app.delete("/api/members/:id", ...adminOnly, async (req, res) => {
   const memberId = Number(req.params.id);
 
   if (!isPositiveInteger(memberId)) {
@@ -275,13 +284,18 @@ app.delete("/api/members/:id", async (req, res) => {
 // GET /api/members/:id/loans
 // ดูประวัติการยืมของสมาชิก
 // ========================
-app.get("/api/members/:id/loans", async (req, res) => {
+app.get("/api/members/:id/loans", authenticate, async (req, res) => {
   const memberId = Number(req.params.id);
 
   if (!isPositiveInteger(memberId)) {
     return res.status(400).json({
       error: "รหัสสมาชิกไม่ถูกต้อง",
     });
+  }
+
+  // ผู้ใช้ทั่วไปดูได้เฉพาะประวัติของตัวเอง ส่วน admin ดูได้ทุกคน
+  if (req.user.role !== "admin" && req.user.member_id !== memberId) {
+    return deny(res, 403, "ดูได้เฉพาะประวัติการยืมของตัวเอง");
   }
 
   try {
@@ -330,7 +344,7 @@ app.get("/api/members/:id/loans", async (req, res) => {
 // GET /api/loans/overdue
 // ดูรายการยืมเกินกำหนดที่ยังไม่ได้คืน
 // ========================
-app.get("/api/loans/overdue", async (req, res) => {
+app.get("/api/loans/overdue", ...adminOnly, async (req, res) => {
   try {
     const [loans] = await db.query(
       `SELECT
@@ -365,8 +379,18 @@ app.get("/api/loans/overdue", async (req, res) => {
 // POST /api/loans
 // ยืมหนังสือ
 // ========================
-app.post("/api/loans", async (req, res) => {
-  const { book_id, member_id, loan_date, due_date } = req.body || {};
+app.post("/api/loans", authenticate, async (req, res) => {
+  const { book_id, loan_date, due_date } = req.body || {};
+  let { member_id } = req.body || {};
+
+  // ผู้ใช้ทั่วไปยืมได้เฉพาะในนามสมาชิกของตัวเอง (ไม่ระบุ member_id จะใช้ของตัวเอง)
+  if (req.user.role !== "admin") {
+    if (member_id === undefined || member_id === null || member_id === "") {
+      member_id = req.user.member_id;
+    } else if (Number(member_id) !== req.user.member_id) {
+      return deny(res, 403, "ยืมได้เฉพาะในนามสมาชิกของตัวเอง");
+    }
+  }
 
   const bookId = Number(book_id);
   const memberId = Number(member_id);
@@ -477,7 +501,7 @@ app.post("/api/loans", async (req, res) => {
 // PUT /api/loans/:id/return
 // คืนหนังสือ
 // ========================
-app.put("/api/loans/:id/return", async (req, res) => {
+app.put("/api/loans/:id/return", authenticate, async (req, res) => {
   const loanId = Number(req.params.id);
 
   if (!isPositiveInteger(loanId)) {
@@ -493,7 +517,7 @@ app.put("/api/loans/:id/return", async (req, res) => {
     await connection.beginTransaction();
 
     const [loans] = await connection.query(
-      `SELECT loan_id, book_id, return_date
+      `SELECT loan_id, book_id, member_id, return_date
        FROM loans
        WHERE loan_id = ?
        FOR UPDATE`,
@@ -506,6 +530,13 @@ app.put("/api/loans/:id/return", async (req, res) => {
       return res.status(404).json({
         error: "ไม่พบรายการยืม",
       });
+    }
+
+    // ผู้ใช้ทั่วไปคืนได้เฉพาะรายการยืมของตัวเอง
+    if (req.user.role !== "admin" && loans[0].member_id !== req.user.member_id) {
+      await connection.rollback();
+
+      return deny(res, 403, "คืนได้เฉพาะรายการยืมของตัวเอง");
     }
 
     if (loans[0].return_date) {

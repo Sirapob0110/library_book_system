@@ -22,3 +22,13 @@ UPDATE books SET total_copies = 2, available_copies = 2 WHERE book_id IN (5,6);
 INSERT INTO members (name, email, phone) VALUES
 ('สมชาย ใจดี','somchai@example.com','0812345678'),
 ('สมหญิง รักเรียน','somying@example.com',NULL);
+
+-- บัญชีสำหรับสาธิต (รหัสผ่านเก็บเป็น bcrypt hash)
+--   admin    / Admin@1234  บทบาท admin (จัดการทุกอย่าง)
+--   somchai  / User@1234   บทบาท user ผูกกับสมาชิก member_id = 1
+--   somying  / User@1234   บทบาท user ผูกกับสมาชิก member_id = 2
+-- เปลี่ยนรหัสผ่านเหล่านี้ก่อนนำไปใช้งานจริง
+INSERT INTO users (username, password_hash, role, member_id) VALUES
+('admin',   '$2b$10$vLeUMwqTqTmqvK1QBrsJQ.CFcQwnS/bNMu/TbQ7p0kIsEL7RrADKO', 'admin', NULL),
+('somchai', '$2b$10$U3/tqzDNNiiQIT1kgzwLROd1b6ruKHA.Lk9yIfSpZ/t/bRDUpTBti', 'user', 1),
+('somying', '$2b$10$U3/tqzDNNiiQIT1kgzwLROd1b6ruKHA.Lk9yIfSpZ/t/bRDUpTBti', 'user', 2);

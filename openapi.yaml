@@ -2,18 +2,30 @@ openapi: 3.0.3
 
 info:
   title: Library Book System API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     OpenAPI Specification สำหรับระบบ Library Book System
     ครอบคลุม Book API และ Circulation Service
+
+    **การยืนยันตัวตน:** เรียก `POST /api/auth/login` เพื่อรับ JWT แล้วแนบ header
+    `Authorization: Bearer <token>` ในทุกคำขอ (ใน Swagger UI กดปุ่ม Authorize แล้ววาง token)
+    ทั้งสองบริการใช้ token เดียวกัน
+
+    **บทบาท:**
+    - `admin` ทำได้ทุกอย่าง
+    - `user` ดูหนังสือ/ผู้แต่ง/หมวดหมู่ได้, ยืมและคืนหนังสือในนามสมาชิกของตัวเอง และดูประวัติของตัวเองเท่านั้น
+    - เส้นทางที่ระบุ "(เฉพาะ admin)" ตอบ 403 เมื่อเรียกด้วย user และตอบ 401 เมื่อไม่ได้เข้าสู่ระบบ
 
 servers:
   - url: http://localhost:3000
     description: Local Book API
 
-security: []
+security:
+  - bearerAuth: []
 
 tags:
+  - name: Auth
+    description: สมัครสมาชิกและเข้าสู่ระบบ (JWT)
   - name: Books
     description: จัดการหนังสือ
   - name: Authors
@@ -28,6 +40,76 @@ tags:
     description: จัดการการยืมและคืนหนังสือ
 
 paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: สมัครสมาชิก (ได้บทบาท user เสมอ)
+      description: |
+        สร้างสมาชิกห้องสมุดและบัญชีผู้ใช้พร้อมกันในธุรกรรมเดียว
+        ไม่รับค่า role จากผู้สมัคร (บัญชี admin สร้างจาก seed.sql เท่านั้น)
+      operationId: post_api_auth_register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterInput'
+      responses:
+        '201':
+          description: สมัครสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: เข้าสู่ระบบและรับ JWT
+      operationId: post_api_auth_login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: เข้าสู่ระบบสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: ข้อมูลผู้ใช้ที่เข้าสู่ระบบอยู่ (อ่านจาก token)
+      operationId: get_api_auth_me
+      responses:
+        '200':
+          description: ข้อมูลผู้ใช้
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/books:
     get:
       tags: [Books]
@@ -41,6 +123,8 @@ paths:
           schema:
             type: string
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: รายการหนังสือ
           content:
@@ -51,7 +135,7 @@ paths:
           $ref: '#/components/responses/BookInternalServerError'
     post:
       tags: [Books]
-      summary: เพิ่มหนังสือ
+      summary: เพิ่มหนังสือ (เฉพาะ admin)
       operationId: post_api_books
       requestBody:
         required: true
@@ -60,6 +144,10 @@ paths:
             schema:
               $ref: '#/components/schemas/BookInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: เพิ่มหนังสือสำเร็จ
           content:
@@ -81,6 +169,8 @@ paths:
       summary: ดูรายละเอียดหนังสือ
       operationId: get_api_books_id
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: รายละเอียดหนังสือ
           content:
@@ -93,7 +183,7 @@ paths:
           $ref: '#/components/responses/BookInternalServerError'
     put:
       tags: [Books]
-      summary: แก้ไขหนังสือ
+      summary: แก้ไขหนังสือ (เฉพาะ admin)
       operationId: put_api_books_id
       requestBody:
         required: true
@@ -102,6 +192,10 @@ paths:
             schema:
               $ref: '#/components/schemas/BookInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: แก้ไขหนังสือสำเร็จ
           content:
@@ -118,9 +212,13 @@ paths:
           $ref: '#/components/responses/BookInternalServerError'
     delete:
       tags: [Books]
-      summary: ลบหนังสือ
+      summary: ลบหนังสือ (เฉพาะ admin)
       operationId: delete_api_books_id
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: ลบหนังสือสำเร็จ
           content:
@@ -142,6 +240,8 @@ paths:
       summary: ค้นหาข้อมูลเพิ่มเติมจาก Open Library
       operationId: get_api_books_id_external_info
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: รายละเอียดหนังสือพร้อมข้อมูลภายนอก
           content:
@@ -159,6 +259,8 @@ paths:
       summary: ดูรายการผู้แต่ง
       operationId: get_api_authors
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: รายการผู้แต่ง
           content:
@@ -169,7 +271,7 @@ paths:
           $ref: '#/components/responses/BookInternalServerError'
     post:
       tags: [Authors]
-      summary: เพิ่มผู้แต่ง
+      summary: เพิ่มผู้แต่ง (เฉพาะ admin)
       operationId: post_api_authors
       requestBody:
         required: true
@@ -178,6 +280,10 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthorInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: เพิ่มผู้แต่งสำเร็จ
           content:
@@ -197,6 +303,8 @@ paths:
       summary: ดูหนังสือของผู้แต่ง
       operationId: get_api_authors_id_books
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: ข้อมูลผู้แต่งและหนังสือ
           content:
@@ -214,6 +322,8 @@ paths:
       summary: ดูรายการหมวดหมู่
       operationId: get_api_categories
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: รายการหมวดหมู่
           content:
@@ -224,7 +334,7 @@ paths:
           $ref: '#/components/responses/BookInternalServerError'
     post:
       tags: [Categories]
-      summary: เพิ่มหมวดหมู่
+      summary: เพิ่มหมวดหมู่ (เฉพาะ admin)
       operationId: post_api_categories
       requestBody:
         required: true
@@ -233,6 +343,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CategoryInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: เพิ่มหมวดหมู่สำเร็จ
           content:
@@ -254,6 +368,7 @@ paths:
       tags: [Health]
       summary: ตรวจสอบสถานะ Circulation Service
       operationId: get_health
+      security: []
       responses:
         '200':
           description: Service ทำงานปกติ
@@ -268,9 +383,13 @@ paths:
         description: Local Circulation Service
     get:
       tags: [Members]
-      summary: ดูรายชื่อสมาชิก
+      summary: ดูรายชื่อสมาชิก (เฉพาะ admin)
       operationId: get_api_members
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: รายชื่อสมาชิก
           content:
@@ -281,7 +400,7 @@ paths:
           $ref: '#/components/responses/CirculationError'
     post:
       tags: [Members]
-      summary: เพิ่มสมาชิก
+      summary: เพิ่มสมาชิก (เฉพาะ admin)
       operationId: post_api_members
       requestBody:
         required: true
@@ -290,6 +409,10 @@ paths:
             schema:
               $ref: '#/components/schemas/MemberInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: เพิ่มสมาชิกสำเร็จ
           content:
@@ -311,7 +434,7 @@ paths:
       - $ref: '#/components/parameters/Id'
     put:
       tags: [Members]
-      summary: แก้ไขข้อมูลสมาชิก
+      summary: แก้ไขข้อมูลสมาชิก (เฉพาะ admin)
       operationId: put_api_members_id
       description: แก้ไขชื่อ อีเมล และเบอร์โทรศัพท์ของสมาชิก
       requestBody:
@@ -321,6 +444,10 @@ paths:
             schema:
               $ref: '#/components/schemas/MemberInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: แก้ไขข้อมูลสมาชิกสำเร็จ
           content:
@@ -337,10 +464,14 @@ paths:
           $ref: '#/components/responses/CirculationError'
     delete:
       tags: [Members]
-      summary: ลบสมาชิก
+      summary: ลบสมาชิก (เฉพาะ admin)
       operationId: delete_api_members_id
       description: ลบสมาชิกที่ไม่มีข้อจำกัดจากประวัติการยืม
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: ลบสมาชิกสำเร็จ
           content:
@@ -368,9 +499,13 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       tags: [Members]
-      summary: ดูประวัติการยืมของสมาชิก
+      summary: ดูประวัติการยืมของสมาชิก (ดูได้เฉพาะของตัวเอง ยกเว้น admin)
       operationId: get_api_members_id_loans
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: ประวัติการยืมของสมาชิก
           content:
@@ -390,9 +525,13 @@ paths:
         description: Local Circulation Service
     get:
       tags: [Loans]
-      summary: ดูรายการยืมเกินกำหนด
+      summary: ดูรายการยืมเกินกำหนด (เฉพาะ admin)
       operationId: get_api_loans_overdue
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: รายการยืมเกินกำหนดและยังไม่คืน
           content:
@@ -408,7 +547,7 @@ paths:
         description: Local Circulation Service
     post:
       tags: [Loans]
-      summary: ยืมหนังสือ
+      summary: ยืมหนังสือ (user ยืมได้เฉพาะในนามตัวเอง (ไม่ต้องส่ง member_id) ยกเว้น admin)
       operationId: post_api_loans
       requestBody:
         required: true
@@ -417,6 +556,10 @@ paths:
             schema:
               $ref: '#/components/schemas/LoanInput'
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '201':
           description: ยืมหนังสือสำเร็จ
           content:
@@ -440,9 +583,13 @@ paths:
       - $ref: '#/components/parameters/Id'
     put:
       tags: [Loans]
-      summary: คืนหนังสือ
+      summary: คืนหนังสือ (user คืนได้เฉพาะรายการยืมของตัวเอง ยกเว้น admin)
       operationId: put_api_loans_id_return
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '200':
           description: คืนหนังสือสำเร็จ
           content:
@@ -459,6 +606,13 @@ paths:
           $ref: '#/components/responses/CirculationError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: token ที่ได้จาก POST /api/auth/login (หมดอายุใน 2 ชั่วโมง)
+
   parameters:
     Id:
       name: id
@@ -470,6 +624,18 @@ components:
         minimum: 1
 
   responses:
+    Unauthorized:
+      description: ไม่ได้เข้าสู่ระบบ, token ไม่ถูกต้อง หรือหมดอายุ (หรือ username/password ผิดตอน login)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthErrorResponse'
+    Forbidden:
+      description: เข้าสู่ระบบแล้วแต่บทบาทไม่มีสิทธิ์ทำรายการนี้
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthErrorResponse'
     BookError:
       description: คำขอไม่สำเร็จหรือข้อมูลไม่ถูกต้องจาก Book API
       content:
@@ -490,6 +656,119 @@ components:
             $ref: '#/components/schemas/CirculationErrorResponse'
 
   schemas:
+    AuthErrorResponse:
+      type: object
+      required: [success, message, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: ไม่มีสิทธิ์ทำรายการนี้
+        error:
+          type: string
+          example: ไม่มีสิทธิ์ทำรายการนี้
+
+    RegisterInput:
+      type: object
+      required: [username, password, name, email]
+      properties:
+        username:
+          type: string
+          pattern: '^[A-Za-z0-9_]{3,30}$'
+          example: newuser
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+          example: Passw0rd123
+        name:
+          type: string
+          minLength: 2
+          example: New User
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        phone:
+          type: string
+          nullable: true
+          example: '0812345678'
+
+    AuthUser:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 2
+        username:
+          type: string
+          example: somchai
+        role:
+          type: string
+          enum: [admin, user]
+        member_id:
+          type: integer
+          nullable: true
+          description: สมาชิกห้องสมุดที่ผูกกับบัญชี (admin ไม่มี)
+          example: 1
+
+    RegisterResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/AuthUser'
+
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          format: password
+          example: Admin@1234
+
+    LoginResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT สำหรับแนบ header Authorization (Bearer)
+            user:
+              allOf:
+                - $ref: '#/components/schemas/AuthUser'
+                - type: object
+                  properties:
+                    name:
+                      type: string
+                      example: สมชาย ใจดี
+
+    MeResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/AuthUser'
+
     BookErrorResponse:
       type: object
       required: [success, message]

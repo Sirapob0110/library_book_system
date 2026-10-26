@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import Login from "./Login";
+import AdminCatalog, { OverdueLoans } from "./AdminCatalog";
 
 // อ่าน API URLs จาก Environment Variables ของ Vite
 function getApiUrl(value, name) {
@@ -24,7 +26,7 @@ const CIRCULATION_API = getApiUrl(
   "VITE_CIRCULATION_API_URL",
 );
 
-const VALID_TABS = ["books", "members", "borrow", "history"];
+const VALID_TABS = ["books", "catalog", "members", "borrow", "history"];
 
 // วันนี้ตามเวลาเครื่องผู้ใช้ รูปแบบ YYYY-MM-DD (ไม่ใช้ toISOString เพราะเป็นเวลา UTC
 // ทำให้ช่วงเที่ยงคืนถึง 07:00 ของไทยได้วันที่เมื่อวาน)
@@ -32,6 +34,27 @@ function getToday() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+const SESSION_KEY = "library_session";
+
+// เก็บ session (token + ผู้ใช้) ไว้ใน sessionStorage: หายเมื่อปิดแท็บ และใช้ไม่ได้ก็ไม่เป็นไร
+function getSavedSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    return saved?.token && saved?.user ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session) {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ใช้งานต่อได้ แต่จะต้องเข้าสู่ระบบใหม่เมื่อรีโหลดหน้า
+  }
 }
 
 function getSavedTab() {
@@ -43,12 +66,21 @@ function getSavedTab() {
   }
 }
 
-function App() {
-  const [tab, setTab] = useState(getSavedTab);
+function Dashboard({ session, onLogout }) {
+  const { user, token } = session;
+  const isAdmin = user.role === "admin";
+  const ownMemberId = user.member_id != null ? String(user.member_id) : "";
+
+  const [savedTab, setTab] = useState(getSavedTab);
+  // user ทั่วไปไม่มีแท็บสมาชิกและแท็บจัดการหนังสือ (เฉพาะ admin)
+  const adminTab = savedTab === "members" || savedTab === "catalog";
+  const tab = adminTab && !isAdmin ? "books" : savedTab;
   const [books, setBooks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loans, setLoans] = useState([]);
-  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [selectedMemberId, setSelectedMemberId] = useState(
+    isAdmin ? "" : ownMemberId,
+  );
   const [loading, setLoading] = useState(false);
   const [today] = useState(getToday); // ใช้เป็นวันที่ต่ำสุดของช่องวันกำหนดคืน
   const [error, setError] = useState("");
@@ -117,6 +149,7 @@ function App() {
         ...options,
         headers: {
           ...(options.body ? { "Content-Type": "application/json" } : {}),
+          Authorization: `Bearer ${token}`,
           ...options.headers,
         },
       });
@@ -127,6 +160,14 @@ function App() {
     }
 
     const result = await response.json().catch(() => ({}));
+
+    // token หมดอายุหรือไม่ถูกต้อง: กลับไปหน้าเข้าสู่ระบบ
+    if (response.status === 401) {
+      onLogout(
+        result.message || result.error || "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
+      );
+      throw new Error("กรุณาเข้าสู่ระบบใหม่");
+    }
 
     if (!response.ok) {
       throw new Error(
@@ -186,7 +227,10 @@ function App() {
     setLoading(true);
 
     try {
-      const results = await Promise.allSettled([loadBooks(), loadMembers()]);
+      const results = await Promise.allSettled([
+        loadBooks(),
+        isAdmin ? loadMembers() : loadLoans(ownMemberId),
+      ]);
 
       const errors = results
         .filter((result) => result.status === "rejected")
@@ -207,9 +251,11 @@ function App() {
   }
 
   // โหลดข้อมูลเมื่อเปิดเว็บ (ดึงข้อมูลจาก API ภายนอกตอน mount จึงต้องตั้ง loading ใน effect)
+  // โหลดครั้งเดียวต่อการเข้าสู่ระบบ เพราะ Dashboard ถูกสร้างใหม่ทุกครั้งที่ผู้ใช้เปลี่ยน
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect
     refreshData();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // รีเซ็ตฟอร์มสมาชิก
@@ -366,7 +412,9 @@ function App() {
     try {
       const today = getToday();
 
-      if (!loanForm.book_id || !loanForm.member_id || !loanForm.due_date) {
+      const memberIdForLoan = isAdmin ? loanForm.member_id : ownMemberId;
+
+      if (!loanForm.book_id || !memberIdForLoan || !loanForm.due_date) {
         throw new Error("กรุณากรอกข้อมูลการยืมให้ครบถ้วน");
       }
 
@@ -378,13 +426,13 @@ function App() {
         method: "POST",
         body: JSON.stringify({
           book_id: Number(loanForm.book_id),
-          member_id: Number(loanForm.member_id),
+          member_id: Number(memberIdForLoan),
           loan_date: today,
           due_date: loanForm.due_date,
         }),
       });
 
-      const memberId = loanForm.member_id;
+      const memberId = memberIdForLoan;
 
       setLoanForm({
         book_id: "",
@@ -476,13 +524,26 @@ function App() {
           <p className="subtitle">ระบบจัดการหนังสือ สมาชิก และการยืม–คืน</p>
         </div>
 
-        <button
-          className="refresh-button"
-          onClick={refreshData}
-          disabled={loading}
-        >
-          ↻ รีเฟรชข้อมูล
-        </button>
+        <div className="hero-actions">
+          <div className="user-chip">
+            <strong>{user.name || user.username}</strong>
+            <span className={isAdmin ? "role-badge admin" : "role-badge"}>
+              {isAdmin ? "ผู้ดูแลระบบ (admin)" : "สมาชิก (user)"}
+            </span>
+          </div>
+
+          <button
+            className="refresh-button"
+            onClick={refreshData}
+            disabled={loading}
+          >
+            ↻ รีเฟรชข้อมูล
+          </button>
+
+          <button className="cancel-button" onClick={() => onLogout()}>
+            ออกจากระบบ
+          </button>
+        </div>
       </header>
 
       <section className="status-row">
@@ -491,10 +552,17 @@ function App() {
           <strong>{books.length}</strong>
         </div>
 
-        <div className="status-card">
-          <span>สมาชิกทั้งหมด</span>
-          <strong>{members.length}</strong>
-        </div>
+        {isAdmin ? (
+          <div className="status-card">
+            <span>สมาชิกทั้งหมด</span>
+            <strong>{members.length}</strong>
+          </div>
+        ) : (
+          <div className="status-card">
+            <span>รายการที่กำลังยืม</span>
+            <strong>{loans.filter((loan) => !loan.return_date).length}</strong>
+          </div>
+        )}
 
         <div className="status-card">
           <span>สถานะระบบ</span>
@@ -528,12 +596,23 @@ function App() {
           หนังสือ
         </button>
 
-        <button
-          className={tab === "members" ? "active" : ""}
-          onClick={() => setTab("members")}
-        >
-          สมาชิก
-        </button>
+        {isAdmin && (
+          <button
+            className={tab === "catalog" ? "active" : ""}
+            onClick={() => setTab("catalog")}
+          >
+            จัดการหนังสือ
+          </button>
+        )}
+
+        {isAdmin && (
+          <button
+            className={tab === "members" ? "active" : ""}
+            onClick={() => setTab("members")}
+          >
+            สมาชิก
+          </button>
+        )}
 
         <button
           className={tab === "borrow" ? "active" : ""}
@@ -604,8 +683,21 @@ function App() {
         </section>
       )}
 
+      {/* จัดการหนังสือ ผู้แต่ง หมวดหมู่ (admin) */}
+      {tab === "catalog" && isAdmin && (
+        <AdminCatalog
+          request={request}
+          bookApi={BOOK_API}
+          books={books}
+          loading={loading}
+          setLoading={setLoading}
+          showStatus={showStatus}
+          reloadBooks={loadBooks}
+        />
+      )}
+
       {/* จัดการสมาชิก */}
-      {tab === "members" && (
+      {tab === "members" && isAdmin && (
         <section className="panel">
           <div className="section-heading">
             <div>
@@ -755,24 +847,34 @@ function App() {
               </select>
             </label>
 
-            <label>
-              สมาชิก *
-              <select
-                value={loanForm.member_id}
-                onChange={(e) =>
-                  setLoanForm({ ...loanForm, member_id: e.target.value })
-                }
-                required
-              >
-                <option value="">เลือกสมาชิก</option>
+            {isAdmin ? (
+              <label>
+                สมาชิก *
+                <select
+                  value={loanForm.member_id}
+                  onChange={(e) =>
+                    setLoanForm({ ...loanForm, member_id: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">เลือกสมาชิก</option>
 
-                {members.map((member) => (
-                  <option key={member.member_id} value={member.member_id}>
-                    #{member.member_id} — {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  {members.map((member) => (
+                    <option key={member.member_id} value={member.member_id}>
+                      #{member.member_id} — {member.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                ผู้ยืม
+                <input
+                  value={`${user.name || user.username} (สมาชิก #${ownMemberId})`}
+                  readOnly
+                />
+              </label>
+            )}
 
             <label>
               วันกำหนดคืน *
@@ -789,7 +891,11 @@ function App() {
 
             <button
               className="primary-button"
-              disabled={loading || books.length === 0 || members.length === 0}
+              disabled={
+                loading ||
+                books.length === 0 ||
+                (isAdmin && members.length === 0)
+              }
               type="submit"
             >
               ยืนยันการยืม
@@ -807,23 +913,34 @@ function App() {
       {tab === "history" && (
         <section className="panel">
           <p className="eyebrow">LOAN HISTORY</p>
-          <h2>ประวัติการยืมและคืน</h2>
+          <h2>{isAdmin ? "ประวัติการยืมและคืน" : "ประวัติการยืมของฉัน"}</h2>
 
-          <label className="history-select">
-            เลือกสมาชิก
-            <select
-              value={selectedMemberId}
-              onChange={(e) => showLoans(e.target.value)}
-            >
-              <option value="">เลือกสมาชิกเพื่อดูประวัติ</option>
+          {isAdmin && (
+            <label className="history-select">
+              เลือกสมาชิก
+              <select
+                value={selectedMemberId}
+                onChange={(e) => showLoans(e.target.value)}
+              >
+                <option value="">เลือกสมาชิกเพื่อดูประวัติ</option>
 
-              {members.map((member) => (
-                <option key={member.member_id} value={member.member_id}>
-                  #{member.member_id} — {member.name}
-                </option>
-              ))}
-            </select>
-          </label>
+                {members.map((member) => (
+                  <option key={member.member_id} value={member.member_id}>
+                    #{member.member_id} — {member.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {isAdmin && (
+            <OverdueLoans
+              request={request}
+              circulationApi={CIRCULATION_API}
+              loading={loading}
+              showStatus={showStatus}
+            />
+          )}
 
           {loans.length > 0 ? (
             <div className="table-wrap">
@@ -872,7 +989,9 @@ function App() {
           ) : (
             <p className="empty">
               {selectedMemberId
-                ? "สมาชิกคนนี้ยังไม่มีประวัติการยืม"
+                ? isAdmin
+                  ? "สมาชิกคนนี้ยังไม่มีประวัติการยืม"
+                  : "คุณยังไม่มีประวัติการยืม"
                 : "เลือกสมาชิกเพื่อดูประวัติการยืม"}
             </p>
           )}
@@ -884,6 +1003,33 @@ function App() {
         <span>Catalog :3000 · Circulation :3001</span>
       </footer>
     </main>
+  );
+}
+
+// ครอบด้วยการตรวจสถานะเข้าสู่ระบบ: ยังไม่ล็อกอินจะเห็นหน้าเข้าสู่ระบบ
+function App() {
+  const [session, setSession] = useState(getSavedSession);
+  const [notice, setNotice] = useState("");
+
+  function handleLogin(next) {
+    saveSession(next);
+    setNotice("");
+    setSession(next);
+  }
+
+  function handleLogout(reason) {
+    saveSession(null);
+    setNotice(typeof reason === "string" ? reason : "");
+    setSession(null);
+  }
+
+  if (!session) {
+    return <Login apiUrl={BOOK_API} onLogin={handleLogin} notice={notice} />;
+  }
+
+  // key ทำให้สลับผู้ใช้แล้ว state ของหน้าหลักถูกล้างใหม่ทั้งหมด
+  return (
+    <Dashboard key={session.token} session={session} onLogout={handleLogout} />
   );
 }
 

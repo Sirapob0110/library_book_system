@@ -652,3 +652,99 @@ footer {
     grid-column: 1 / -1;
   }
 }
+
+/* =========================
+   Login / ผู้ใช้ที่เข้าสู่ระบบ
+========================= */
+
+.login-shell {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+.login-panel {
+  width: min(440px, 100%);
+}
+
+.login-panel h1 span {
+  color: #60a5fa;
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+  margin: 22px 0 14px;
+}
+
+.login-form .primary-button {
+  width: 100%;
+}
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.user-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.role-badge {
+  padding: 2px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+  color: #b7c4d8;
+  font-size: 12px;
+}
+
+.role-badge.admin {
+  border-color: rgba(250, 204, 21, 0.6);
+  color: #facc15;
+}
+
+input[readonly] {
+  opacity: 0.8;
+  cursor: default;
+}
+
+/* จัดการหนังสือ (admin) */
+.category-picker {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.category-picker .check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-picker .check input {
+  width: auto;
+}
+
+.overdue-box {
+  margin: 16px 0;
+}

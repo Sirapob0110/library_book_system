@@ -13,7 +13,7 @@
 | --- | ---: | --- | --- |
 | OpenAPI Specification ครบถ้วนและตรงกับโค้ดจริง | 1.5 | มีไฟล์ `openapi.yaml` และหน้า Swagger UI แสดง endpoint ของระบบ | ตรวจ `openapi.yaml` เทียบกับ routes, request validation, status code และ response schema ใน `src/index.js` ก่อนส่ง |
 | Swagger UI เข้าถึงได้จริงและแสดงผลถูกต้อง | 0.5 | เปิด `http://localhost:3000/api-docs` ได้ และทดลอง `GET /api/books?q=Harry` ได้ HTTP 200 | มีภาพหลักฐานในหัวข้อภาพประกอบด้านล่าง |
-| Postman Collection ครบทุก endpoint พร้อมตัวอย่างจริง | 0.5 | มีไฟล์ `postman_collection.json`; Collection Runner แสดง 23 requests, 47 tests passed, 0 failed และ 0 errors | ตรวจให้แน่ใจว่า Collection ครบทุก endpoint ในโค้ดจริงและมีตัวอย่าง request/response ที่จำเป็น |
+| Postman Collection ครบทุก endpoint พร้อมตัวอย่างจริง | 0.5 | มีไฟล์ `postman_collection.json`; Collection Runner แสดง 23 requests, 47 tests passed, 0 failed และ 0 errors (ผลของเฟส 2 ก่อนเพิ่มระบบ login) ปัจจุบัน Collection เพิ่มโฟลเดอร์ Auth: รันด้วย Newman ได้ 35 requests, 64 assertions, 0 failed | ตรวจให้แน่ใจว่า Collection ครบทุก endpoint ในโค้ดจริงและมีตัวอย่าง request/response ที่จำเป็น |
 
 ### 2. External API Failure Handling (เต็ม 2.5 คะแนน)
 
@@ -51,6 +51,8 @@
 ### Postman Collection Runner: 47 tests passed, 0 failed, 0 errors
 
 ![Postman Collection Runner: 47 tests passed, 0 failed, 0 errors](wk10-project-phase2-evidence/06-postman-runner.png)
+
+หมายเหตุ: ภาพนี้เป็นผลรันของเฟส 2 หลังเพิ่มระบบเข้าสู่ระบบ (JWT) ใน Collection มีโฟลเดอร์ `Auth` เพิ่ม และรันด้วย Newman กับฐานข้อมูลจริงได้ 35 requests, 64 assertions, 0 failed
 
 ## 1. กลไกที่ออกแบบไว้
 

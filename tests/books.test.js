@@ -8,6 +8,7 @@ jest.mock("../src/services/external-api", () => ({
 }));
 
 const request = require("supertest");
+const { as, admin } = require("./helpers/auth");
 const app = require("../src/index");
 const pool = require("../src/db");
 const { lookupBookByIsbn } = require("../src/services/external-api");
@@ -72,7 +73,7 @@ describe("Book API", () => {
 
       pool.query.mockResolvedValueOnce([books]);
 
-      const res = await request(app).get("/api/books");
+      const res = await as(app, admin).get("/api/books");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -82,7 +83,7 @@ describe("Book API", () => {
     test("returns an empty list when no books exist", async () => {
       pool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/api/books");
+      const res = await as(app, admin).get("/api/books");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -91,7 +92,7 @@ describe("Book API", () => {
     test("filters books by search query", async () => {
       pool.query.mockResolvedValueOnce([[bookDetail]]);
 
-      const res = await request(app).get("/api/books").query({ q: "Test" });
+      const res = await as(app, admin).get("/api/books").query({ q: "Test" });
 
       expect(res.status).toBe(200);
       expect(pool.query).toHaveBeenCalledWith(
@@ -106,7 +107,7 @@ describe("Book API", () => {
 
       pool.query.mockRejectedValueOnce(error);
 
-      const res = await request(app).get("/api/books");
+      const res = await as(app, admin).get("/api/books");
 
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
@@ -120,7 +121,7 @@ describe("Book API", () => {
     test("returns 404 when the book does not exist", async () => {
       pool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/api/books/99999");
+      const res = await as(app, admin).get("/api/books/99999");
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -129,7 +130,7 @@ describe("Book API", () => {
     test("returns book details with categories", async () => {
       mockBookDetail();
 
-      const res = await request(app).get("/api/books/1");
+      const res = await as(app, admin).get("/api/books/1");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -141,7 +142,7 @@ describe("Book API", () => {
       const log = jest.spyOn(console, "error").mockImplementation(() => {});
       pool.query.mockRejectedValueOnce(new Error("Database error"));
 
-      const res = await request(app).get("/api/books/1");
+      const res = await as(app, admin).get("/api/books/1");
 
       expect(res.status).toBe(500);
       log.mockRestore();
@@ -152,7 +153,7 @@ describe("Book API", () => {
 
   describe("POST /api/books", () => {
     test("returns 400 when required book data is missing", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({ title: "Test Book" });
 
@@ -162,7 +163,7 @@ describe("Book API", () => {
     });
 
     test("returns 400 when author_id is not an integer", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({
           ...validBook,
@@ -174,7 +175,7 @@ describe("Book API", () => {
     });
 
     test("returns 400 when published_year is not an integer", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({
           ...validBook,
@@ -186,7 +187,7 @@ describe("Book API", () => {
     });
 
     test("returns 400 when price is negative", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({
           ...validBook,
@@ -198,7 +199,7 @@ describe("Book API", () => {
     });
 
     test("returns 400 when category_ids is invalid", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({
           ...validBook,
@@ -216,7 +217,7 @@ describe("Book API", () => {
       connection.query.mockResolvedValueOnce([{ insertId: 10 }]);
       mockBookDetail({ ...bookDetail, book_id: 10 }, []);
 
-      const res = await request(app).post("/api/books").send(validBook);
+      const res = await as(app, admin).post("/api/books").send(validBook);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -235,7 +236,7 @@ describe("Book API", () => {
 
       mockBookDetail({ ...bookDetail, book_id: 10 });
 
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/books")
         .send({ ...validBook, category_ids: [1] });
 
@@ -250,7 +251,7 @@ describe("Book API", () => {
       error.code = "ER_DUP_ENTRY";
       connection.query.mockRejectedValueOnce(error);
 
-      const res = await request(app).post("/api/books").send(validBook);
+      const res = await as(app, admin).post("/api/books").send(validBook);
 
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
@@ -264,7 +265,7 @@ describe("Book API", () => {
       error.code = "ER_NO_REFERENCED_ROW_2";
       connection.query.mockRejectedValueOnce(error);
 
-      const res = await request(app).post("/api/books").send(validBook);
+      const res = await as(app, admin).post("/api/books").send(validBook);
 
       expect(res.status).toBe(400);
       expect(connection.rollback).toHaveBeenCalledTimes(1);
@@ -276,7 +277,7 @@ describe("Book API", () => {
 
   describe("PUT /api/books/:id", () => {
     test("returns 400 when input is invalid", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .put("/api/books/1")
         .send({ title: "Missing fields" });
 
@@ -288,7 +289,7 @@ describe("Book API", () => {
       const connection = mockConnection();
       connection.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
 
-      const res = await request(app).put("/api/books/99999").send(validBook);
+      const res = await as(app, admin).put("/api/books/99999").send(validBook);
 
       expect(res.status).toBe(404);
       expect(connection.rollback).toHaveBeenCalledTimes(1);
@@ -301,7 +302,7 @@ describe("Book API", () => {
       connection.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
       mockBookDetail();
 
-      const res = await request(app).put("/api/books/1").send(validBook);
+      const res = await as(app, admin).put("/api/books/1").send(validBook);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -319,7 +320,7 @@ describe("Book API", () => {
 
       mockBookDetail();
 
-      const res = await request(app)
+      const res = await as(app, admin)
         .put("/api/books/1")
         .send({ ...validBook, category_ids: [1, 2] });
 
@@ -334,7 +335,7 @@ describe("Book API", () => {
       error.code = "ER_DUP_ENTRY";
       connection.query.mockRejectedValueOnce(error);
 
-      const res = await request(app).put("/api/books/1").send(validBook);
+      const res = await as(app, admin).put("/api/books/1").send(validBook);
 
       expect(res.status).toBe(409);
       expect(connection.rollback).toHaveBeenCalledTimes(1);
@@ -348,7 +349,7 @@ describe("Book API", () => {
     test("deletes a book successfully", async () => {
       pool.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
 
-      const res = await request(app).delete("/api/books/1");
+      const res = await as(app, admin).delete("/api/books/1");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -358,7 +359,7 @@ describe("Book API", () => {
     test("returns 404 when the book does not exist", async () => {
       pool.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
 
-      const res = await request(app).delete("/api/books/99999");
+      const res = await as(app, admin).delete("/api/books/99999");
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -368,7 +369,7 @@ describe("Book API", () => {
       const log = jest.spyOn(console, "error").mockImplementation(() => {});
       pool.query.mockRejectedValueOnce(new Error("Database error"));
 
-      const res = await request(app).delete("/api/books/1");
+      const res = await as(app, admin).delete("/api/books/1");
 
       expect(res.status).toBe(500);
       log.mockRestore();
@@ -381,7 +382,7 @@ describe("Book API", () => {
     test("returns 404 when the book does not exist", async () => {
       pool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/api/books/99999/external-info");
+      const res = await as(app, admin).get("/api/books/99999/external-info");
 
       expect(res.status).toBe(404);
       expect(lookupBookByIsbn).not.toHaveBeenCalled();
@@ -393,7 +394,7 @@ describe("Book API", () => {
         description: "A test description",
       });
 
-      const res = await request(app).get("/api/books/1/external-info");
+      const res = await as(app, admin).get("/api/books/1/external-info");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -409,7 +410,7 @@ describe("Book API", () => {
         new Error("External API unavailable"),
       );
 
-      const res = await request(app).get("/api/books/1/external-info");
+      const res = await as(app, admin).get("/api/books/1/external-info");
 
       expect(res.status).toBe(500);
       log.mockRestore();
@@ -431,7 +432,7 @@ describe("Book API", () => {
 
       pool.query.mockResolvedValueOnce([authors]);
 
-      const res = await request(app).get("/api/authors");
+      const res = await as(app, admin).get("/api/authors");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual(authors);
@@ -441,7 +442,7 @@ describe("Book API", () => {
       const log = jest.spyOn(console, "error").mockImplementation(() => {});
       pool.query.mockRejectedValueOnce(new Error("Database error"));
 
-      const res = await request(app).get("/api/authors");
+      const res = await as(app, admin).get("/api/authors");
 
       expect(res.status).toBe(500);
       log.mockRestore();
@@ -450,7 +451,7 @@ describe("Book API", () => {
 
   describe("POST /api/authors", () => {
     test("returns 400 when name is missing", async () => {
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/authors")
         .send({ nationality: "Thai" });
 
@@ -459,7 +460,7 @@ describe("Book API", () => {
     });
 
     test("returns 400 when birth_year is not an integer", async () => {
-      const res = await request(app).post("/api/authors").send({
+      const res = await as(app, admin).post("/api/authors").send({
         name: "Test Author",
         birth_year: "invalid",
       });
@@ -471,7 +472,7 @@ describe("Book API", () => {
     test("creates an author successfully", async () => {
       pool.query.mockResolvedValueOnce([{ insertId: 10 }]);
 
-      const res = await request(app).post("/api/authors").send({
+      const res = await as(app, admin).post("/api/authors").send({
         name: "Test Author",
         nationality: "Thai",
         birth_year: 2000,
@@ -489,7 +490,7 @@ describe("Book API", () => {
       error.code = "ER_DUP_ENTRY";
       pool.query.mockRejectedValueOnce(error);
 
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/authors")
         .send({ name: "Test Author" });
 
@@ -502,7 +503,7 @@ describe("Book API", () => {
     test("returns 404 when author does not exist", async () => {
       pool.query.mockResolvedValueOnce([[]]);
 
-      const res = await request(app).get("/api/authors/99999/books");
+      const res = await as(app, admin).get("/api/authors/99999/books");
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -516,7 +517,7 @@ describe("Book API", () => {
         .mockResolvedValueOnce([[author]])
         .mockResolvedValueOnce([books]);
 
-      const res = await request(app).get("/api/authors/1/books");
+      const res = await as(app, admin).get("/api/authors/1/books");
 
       expect(res.status).toBe(200);
       expect(res.body.data.author).toEqual(author);
@@ -532,7 +533,7 @@ describe("Book API", () => {
 
       pool.query.mockResolvedValueOnce([rows]);
 
-      const res = await request(app).get("/api/categories");
+      const res = await as(app, admin).get("/api/categories");
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual(rows);
@@ -542,7 +543,7 @@ describe("Book API", () => {
       const log = jest.spyOn(console, "error").mockImplementation(() => {});
       pool.query.mockRejectedValueOnce(new Error("Database error"));
 
-      const res = await request(app).get("/api/categories");
+      const res = await as(app, admin).get("/api/categories");
 
       expect(res.status).toBe(500);
       log.mockRestore();
@@ -551,7 +552,7 @@ describe("Book API", () => {
 
   describe("POST /api/categories", () => {
     test("returns 400 when name is missing", async () => {
-      const res = await request(app).post("/api/categories").send({});
+      const res = await as(app, admin).post("/api/categories").send({});
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -560,7 +561,7 @@ describe("Book API", () => {
     test("creates a category successfully", async () => {
       pool.query.mockResolvedValueOnce([{ insertId: 5 }]);
 
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/categories")
         .send({ name: "Programming" });
 
@@ -576,7 +577,7 @@ describe("Book API", () => {
       error.code = "ER_DUP_ENTRY";
       pool.query.mockRejectedValueOnce(error);
 
-      const res = await request(app)
+      const res = await as(app, admin)
         .post("/api/categories")
         .send({ name: "Programming" });
 
