@@ -1,196 +1,193 @@
-# CLO Requirements Checklist — Phase 3
+# CLO Requirements Checklist — โครงงานระยะที่ 3 (Library Book System)
 
-## 1. Purpose
+## 1. วิธีอ่านเอกสาร
 
-เอกสารนี้ใช้ตรวจสอบความครบถ้วนของโครงงาน Library Book System ระยะที่ 3 โดยแบ่งตามเกณฑ์ประเมิน 3 ส่วน ได้แก่ CLO8 — Final Integration, CLO6 — Client-Facing Frontend และ CLO7 — Project Defense พร้อมระบุไฟล์และหลักฐานสำหรับตรวจสอบย้อนกลับ
+เอกสารนี้ตรวจว่าระบบครอบคลุมข้อกำหนดของ CLO8 (Final Integration), CLO6 (Client-Facing Frontend) และ CLO7 (Project Defense) พร้อมหลักฐานที่ตรวจสอบย้อนกลับได้ในรูป `ไฟล์:บรรทัด` (เลขบรรทัดอ้างอิงจาก commit `2b13cf6` ของ branch `main`)
 
-**หมายเหตุ:** สถานะใน Checklist ต้องอ้างอิงจากโค้ด ผลทดสอบ และการทดลองใช้งานจริง การมีไฟล์หรือการเปิดระบบได้เพียงอย่างเดียวไม่ถือเป็นหลักฐานว่าผ่านเกณฑ์ทั้งหมด
+ความหมายของสถานะ
+
+| สัญลักษณ์ | ความหมาย |
+|---|---|
+| `[x]` | ตรวจแล้ว ระบุวิธีตรวจกำกับไว้ในตาราง |
+| `[ ]` | ยังไม่ได้ตรวจ ต้องทดสอบด้วยตนเองก่อนติ๊ก |
+
+วิธีตรวจที่ใช้ในเอกสารนี้
+
+- **อ่านโค้ด** อ่านซอร์สและระบุบรรทัดที่เกี่ยวข้อง
+- **รันทดสอบ** รัน `npm test` (Jest) หรือเรียก API จริงด้วย `curl` กับฐานข้อมูลที่สร้างใหม่จาก `schema.sql` และ `seed.sql`
+- **ทดสอบมือ** ทดลองผ่านหน้าเว็บในเบราว์เซอร์
 
 ## 2. CLO8 — Final Integration (5 คะแนน)
 
-| Checklist | Evidence | Status |
+### 2.1 ระบบรวมทำงานได้จริงโดยไม่มี conflict หรือ error หลงเหลือ
+
+| Checklist | หลักฐาน | สถานะ |
 |---|---|---|
-| รวมโค้ดจาก Phase 1, Phase 2 และ Microservices เป็นระบบเดียว | `src/`, `src/circulation/`, `package.json` | [ ] ตรวจยืนยันการทำงานร่วมกัน |
-| ระบบไม่มี merge conflict หลงเหลือ | ไฟล์ใน `src/` และผลการรันบริการ | [ ] ตรวจสอบก่อนส่ง |
-| Book API ทำงานได้จริง | `src/index.js` และผลการเรียก API | [x] ทดลองใช้งานผ่าน Frontend แล้ว |
-| Circulation Service ทำงานได้จริง | `src/circulation/index.js` และผลการเรียก API | [x] ทดลองใช้งานผ่าน Frontend แล้ว |
-| OpenAPI Specification ตรงกับ endpoints จริง รวมบริการที่เกี่ยวข้อง | `openapi.yaml`, route ใน `src/` และ Swagger UI | [ ] ตรวจสอบให้ครบทุก endpoint |
-| มีชุดทดสอบสำหรับระบบ | `tests/books.test.js`, `src/circulation/circulation.test.js` และผล `npm test` | [x] มีชุดทดสอบและรายงานผล |
-| มีรายงาน Test Coverage และระบุส่วนที่ยังไม่มี test ครอบคลุม | `coverage-report.md`, `coverage/index.html` | [x] มีรายงานผล แต่ต้องยืนยันตัวเลขล่าสุด |
-| มี Checklist CLO พร้อมหลักฐานตรวจสอบย้อนกลับได้ | `clo-requirements-checklist.md` และไฟล์ที่อ้างอิง | [ ] ตรวจสอบหลักฐานก่อนส่ง |
+| รวมโมดูลจาก Phase 1–2 และ Microservices เป็นระบบเดียว | Book API: `src/index.js:381` (`app.listen`, พอร์ต 3000) · Circulation Service: `src/circulation/index.js:578` (`app.listen`, พอร์ต 3001) · ตัวเรียก API ภายนอก: `src/services/external-api.js` · สคริปต์รัน: `package.json` (`start`, `start:circulation`) | `[x]` อ่านโค้ด |
+| ไม่มี merge conflict หลงเหลือ | ค้นหา `<<<<<<<`, `=======`, `>>>>>>>` ในไฟล์ `.js .jsx .md .yaml .json .sql` ทั้ง repo (ไม่รวม `node_modules`, `coverage`) ไม่พบ | `[x]` รันค้นหา |
+| ฐานข้อมูลสร้างจาก repo ได้ครบทุกตาราง | `schema.sql:28-29` (`total_copies`, `available_copies`) · `schema.sql:50` (`members`) · `schema.sql:58` (`loans`) · `seed.sql` | `[x]` สร้างฐานข้อมูลใหม่จากไฟล์ทั้งสองแล้วรันบริการทั้งสอง |
+| Book API ทำงานได้ | routes: `src/index.js:110` (GET books) · `:131` (GET book) · `:144` (POST) · `:180` (PUT) · `:234` (DELETE) · `:251` (external-info) · `:267` `:280` `:317` (authors) · `:345` `:358` (categories) | `[x]` รันทดสอบ (`curl` + Jest) |
+| Circulation Service ทำงานได้ | routes: `src/circulation/index.js:91` (health) · `:102` `:126` `:165` `:232` (members) · `:278` (ประวัติยืม) · `:333` (overdue) · `:368` (ยืม) · `:480` (คืน) | `[x]` รันทดสอบ (`curl` + Jest) |
+| การยืมและคืนทำเป็น transaction และล็อกแถว | ยืม: `src/circulation/index.js:393` (begin) · `:412` (`FOR UPDATE`) · `:445` (commit) · rollback `:401` `:417` `:425` `:458` · คืน: `:493` (begin) · `:499` (`FOR UPDATE`) · `:534` (commit) | `[x]` อ่านโค้ด และรันทดสอบ: ยืมแล้วจำนวนเล่มลด, ยืมเกินจำนวนได้ 409, คืนซ้ำได้ 409 |
+| จัดการวันที่ไม่ให้เลื่อนตามเขตเวลา | `src/db.js:15` (`dateStrings: ["DATE"]`) | `[x]` ทดสอบด้วย `TZ=Asia/Bangkok` ได้ `2026-10-10` ตรงกับที่กรอก |
+| Book API และ Circulation Service ทำงานพร้อมกับ Frontend ได้ | ดูหัวข้อ 3 | `[ ]` ทดสอบมือตามขั้นตอนในหัวข้อ 5 |
 
-### 2.1 Test Coverage Baseline
+### 2.2 เอกสาร API ตรงกับโค้ดจริง (Swagger/Code Match)
 
-ผลการทดสอบที่บันทึกไว้ใน `coverage-report.md` มีดังนี้
+| Checklist | หลักฐาน | สถานะ |
+|---|---|---|
+| ทุก route ในโค้ดมีใน `openapi.yaml` | โค้ดมี 20 routes (Book API 11 + Circulation 9) และ `openapi.yaml` มี 20 operations ตรงกันทุกรายการ path ใน spec: `openapi.yaml:31` (`/api/books`) · `:76` (`/api/books/{id}`) · `:137` (external-info) · `:156` `:192` (authors) · `:211` (categories) · `:249` (`/health`) · `:265` `:306` `:363` (members) · `:387` (overdue) · `:405` (loans) · `:435` (return) | `[x]` เทียบ route จากโค้ดกับ path ใน spec ด้วยสคริปต์ |
+| `openapi.yaml` ผ่านการตรวจรูปแบบ | ตรวจด้วย `@apidevtools/swagger-parser` ผล: valid OpenAPI 3.0.3 (13 paths) ทั้ง `openapi.yaml` และ `src/circulation/openapi.yaml` | `[x]` รันตรวจ |
+| endpoint ของ Circulation ระบุพอร์ตที่ถูกต้อง | `openapi.yaml` กำหนด `servers: http://localhost:3001` ที่ระดับ path ของ members, loans และ health | `[x]` อ่านสเปก |
+| Swagger UI เปิดได้ | Book API: `src/index.js:26` (`/api-docs`, พอร์ต 3000) · Circulation: `src/circulation/index.js:29` (`/api-docs`, พอร์ต 3001) | `[ ]` เปิด http://localhost:3000/api-docs และ http://localhost:3001/api-docs ดูในเบราว์เซอร์ |
 
-| รายการ | ผลการทดสอบ |
-|---|---:|
-| Test Suites | 2 passed |
-| Tests | 69 passed |
-| Tests ที่ไม่ผ่าน | 0 |
-| Statements | 90.43% |
-| Branches | 81.86% |
-| Functions | 88.57% |
-| Lines | 90.50% |
+ข้อควรระวัง: มีไฟล์ OpenAPI สองฉบับ (`openapi.yaml` ที่ root ใช้ส่งงาน และ `src/circulation/openapi.yaml` ที่ Circulation Service อ่านเอง) ปัจจุบันต่างกันเฉพาะ `operationId` และ `security` หากแก้ฉบับหนึ่งต้องแก้อีกฉบับให้ตรงกัน
 
-**ข้อกำหนดก่อนส่ง:** ต้องรัน `npm test` จากโฟลเดอร์หลักของโปรเจกต์อีกครั้ง และตรวจสอบให้แน่ใจว่าผลที่ได้ตรงกับรายงานข้างต้น หากตัวเลขเปลี่ยนแปลง ให้แก้ทั้ง `coverage-report.md` และตารางนี้ตามผลจริงล่าสุด
+### 2.3 รายงาน Test Coverage
 
-### 2.2 ส่วนของโค้ดที่ยังไม่มี Test Coverage ครบถ้วน
+| Checklist | หลักฐาน | สถานะ |
+|---|---|---|
+| มีชุดทดสอบครอบคลุมทั้งสองบริการ | `tests/books.test.js` (40 tests, describe ที่บรรทัด 15–552) · `src/circulation/circulation.test.js` (29 tests, describe ที่บรรทัด 11–334) | `[x]` รันทดสอบ |
+| ผลทดสอบล่าสุด | Test Suites 2/2 ผ่าน · Tests 69/69 ผ่าน · Statements 90.43% · Branches 82.38% · Functions 88.57% · Lines 90.50% | `[x]` รัน `npm test` ซ้ำเมื่อ 26 ต.ค. 2569 ตัวเลขตรงกับ `coverage-report.md` |
+| ระบุจุดที่ยังไม่มี test | `coverage-report.md` หัวข้อ 6 (บรรทัดที่ไม่ครอบคลุม) และหัวข้อ 5.2 (ไฟล์ที่ไม่ถูกนับ: `db.js`, `external-api.js`, ไฟล์สำรอง) | `[x]` |
+| รายงานสะท้อนสถานะจริง | ตัวเลข 90.43% นับเฉพาะไฟล์ที่ชุดทดสอบเรียกใช้ เมื่อนับทุกไฟล์ใน `src/` (ไม่รวมไฟล์สำรอง) ได้ 78.97% | `[x]` ระบุไว้ใน `coverage-report.md` หัวข้อ 5.2 |
 
-ตามรายงาน `coverage-report.md` ที่บันทึกไว้ มีตำแหน่งที่ควรพิจารณาเพิ่มกรณีทดสอบดังนี้
+### 2.4 ข้อจำกัดที่ทราบ
 
-**Book API — `src/index.js`**
-- บรรทัด 338
-- บรรทัด 381–383
-
-**Circulation Service — `src/circulation/index.js`**
-- บรรทัด 42 และ 64
-- บรรทัด 75–83
-- บรรทัด 153–155
-- บรรทัด 176
-- บรรทัด 214–222
-- บรรทัด 252
-- บรรทัด 266–268
-- บรรทัด 321–323
-- บรรทัด 460
-- บรรทัด 545
-- บรรทัด 565–571
-- บรรทัด 578–580
-
-ตำแหน่งข้างต้นอ้างอิงจากรายงาน Coverage ที่มีอยู่ ควรตรวจสอบกับ `coverage/index.html` หลังรันทดสอบรอบล่าสุด เนื่องจากเลขบรรทัดอาจเปลี่ยนเมื่อมีการแก้ไขโค้ด
-
-### 2.3 ข้อจำกัดของการทดสอบ
-
-1. ชุดทดสอบที่ใช้ Mock Database ช่วยตรวจสอบตรรกะของระบบ แต่ไม่สามารถยืนยันการทำงานกับฐานข้อมูลจริงได้ทุกกรณี
-2. ค่า Coverage แสดงสัดส่วนของโค้ดที่ถูกเรียกใช้ระหว่างการทดสอบ ไม่ได้ยืนยันว่าระบบปราศจากข้อผิดพลาด
-3. ต้องตรวจสอบการทำงานร่วมกันของ Book API, Circulation Service และ Frontend แยกจากผล Unit Test
-4. ต้องยืนยันว่าเอกสาร OpenAPI ครอบคลุม endpoints ที่โจทย์กำหนดให้จัดทำเอกสาร โดยเฉพาะ endpoints ของ Circulation Service
+1. ชุดทดสอบทั้งหมด mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง ส่วนนี้ตรวจแยกด้วย `curl` กับฐานข้อมูลที่สร้างจาก `schema.sql`
+2. `src/services/external-api.js` ไม่มี unit test (ถูก mock ในชุดทดสอบ) การทดสอบ retry / timeout / fallback ใช้การทดสอบมือ บันทึกใน `failure-scenario-results.md`
+3. `microservices-design.md` เป็นการออกแบบเป้าหมาย (มี API Gateway และฐานข้อมูลแยก 3 ชุด) ของที่ทำจริงคือ 2 บริการใช้ฐานข้อมูล `book_system` ร่วมกัน และไม่มี API Gateway เหตุผล: การยืมต้องปรับ `books.available_copies` และเพิ่ม `loans` ใน transaction เดียวกัน (`src/circulation/index.js:393-445`)
+4. `postman_collection.json` ครอบคลุม endpoint ของ Book API เท่านั้น endpoint ของ Circulation Service ทดสอบด้วย Jest, `curl` และหน้าเว็บ
+5. ไฟล์ `src/index.circulation-backup.js` เป็นไฟล์สำรองที่ไม่มีโค้ดส่วนใดเรียกใช้
 
 ## 3. CLO6 — Client-Facing Frontend (10 คะแนน)
 
-| Checklist | Evidence | Status |
+ไฟล์หลัก: `frontend/src/App.jsx` (React + Vite)
+
+### 3.1 เรียกใช้ API จริงอย่างน้อย 3 endpoint (รวม GET และการเปลี่ยนแปลงข้อมูล)
+
+| การเรียก | หลักฐาน | ประเภท |
 |---|---|---|
-| มีหน้าเว็บสำหรับใช้งานระบบ | `frontend/src/App.jsx` และไฟล์ใน `frontend/` | [x] มีหน้าเว็บและทดลองใช้งานแล้ว |
-| Frontend เรียก API จริงอย่างน้อย 3 endpoints | `frontend/src/App.jsx` และผลทดลองใช้งาน | [x] ทดลองหลายรายการผ่านหน้าเว็บแล้ว |
-| มีการเรียก API แบบ GET | `frontend/src/App.jsx` — รายการหนังสือ สมาชิก และประวัติการยืม | [x] ทดลองอ่านข้อมูลแล้ว |
-| มีการเรียก API แบบ POST, PUT หรือ DELETE อย่างน้อยหนึ่งรายการ | `frontend/src/App.jsx` — เพิ่มสมาชิกและทำรายการยืม/คืน | [x] ทดลองเปลี่ยนแปลงข้อมูลแล้ว |
-| แสดงสถานะ Loading ระหว่างรอ API | โค้ดจัดการสถานะใน `frontend/src/App.jsx` | [ ] ตรวจสอบพฤติกรรมระหว่างโหลด |
-| แสดงข้อความ Error เมื่อ API เรียกไม่สำเร็จ | โค้ดจัดการ Error ใน `frontend/src/App.jsx` | [ ] ทดสอบเมื่อ Backend ไม่พร้อมใช้งาน |
-| มีฟอร์มรับข้อมูลสำหรับการเปลี่ยนแปลงข้อมูล | ฟอร์มสมาชิกและฟอร์มที่เกี่ยวข้องใน `frontend/src/App.jsx` | [x] ทดลองเพิ่มสมาชิกแล้ว |
-| ตรวจสอบความถูกต้องของข้อมูลก่อนส่ง API | Validation ใน `frontend/src/App.jsx` | [ ] ทดสอบกรณีข้อมูลไม่ถูกต้อง |
-| Frontend ทำงานร่วมกับ Backend จริง | ผลทดลองดูหนังสือ ดูสมาชิก เพิ่มสมาชิก ยืมหนังสือ และคืนหนังสือ | [x] ทดลองครบทั้ง 5 รายการแล้ว |
+| รายการหนังสือ `GET /api/books` | `frontend/src/App.jsx:139` | GET |
+| รายการสมาชิก `GET /api/members` | `frontend/src/App.jsx:154` | GET |
+| ประวัติการยืม `GET /api/members/{id}/loans` | `frontend/src/App.jsx:168-169` | GET |
+| เพิ่มสมาชิก `POST /api/members` | `frontend/src/App.jsx:225` | POST |
+| แก้ไขสมาชิก `PUT /api/members/{id}` | `frontend/src/App.jsx:277-278` | PUT |
+| ลบสมาชิก `DELETE /api/members/{id}` | `frontend/src/App.jsx:317-318` | DELETE |
+| ยืมหนังสือ `POST /api/loans` | `frontend/src/App.jsx:367` | POST |
+| คืนหนังสือ `PUT /api/loans/{id}/return` | `frontend/src/App.jsx:431-432` | PUT |
 
-### 3.1 หลักฐานการทดสอบ Frontend
+| Checklist | สถานะ |
+|---|---|
+| เรียก API จริง 8 รูปแบบ ครบทั้ง GET, POST, PUT, DELETE (ฟังก์ชันกลาง `request` ที่ `App.jsx:103`) | `[x]` อ่านโค้ด · ฝั่งหลังบ้านของ endpoint เหล่านี้ผ่านทั้ง Jest และการเรียกด้วย `curl` (ยกเว้นการแก้ไขและลบสมาชิกที่สำเร็จ ซึ่งผ่าน Jest เท่านั้น) |
+| หน้าเว็บทำงานกับ Backend จริงครบทุกขั้น | `[ ]` ทดสอบมือ 5 รายการ: ดูหนังสือ, ดูสมาชิก, เพิ่มสมาชิก, ยืม, คืน |
+| Build ผ่านและไม่มี error จาก lint | `[x]` `vite build` สำเร็จ · `oxlint` 0 errors, 2 warnings (`App.jsx:202` setState ใน effect, `App.jsx:772` เรียก `Date` ระหว่าง render) ไม่กระทบการทำงาน |
 
-รายการที่ทดลองใช้งานผ่านหน้าเว็บแล้ว ได้แก่
+### 3.2 หน้าจอเหมาะกับผู้ใช้ และแสดงสถานะ loading/error
 
-1. แสดงรายการหนังสือ
-2. แสดงรายการสมาชิก
-3. เพิ่มสมาชิกผ่านแบบฟอร์ม
-4. ยืมหนังสือ
-5. คืนหนังสือ
+| Checklist | หลักฐาน | สถานะ |
+|---|---|---|
+| มีสถานะ loading ระหว่างรอ API | state: `App.jsx:44` · แถบแสดงผล: `App.jsx:507-508` (`role="status"`) · ปิดปุ่มระหว่างโหลด: `App.jsx:472` `:654` `:665` `:692` `:701` `:782` `:850` · ทุกฟังก์ชัน reset ใน `finally` เช่น `:196` `:241` `:300` `:344` `:404` `:420` `:454` | `[x]` อ่านโค้ด · `[ ]` ยืนยันในเบราว์เซอร์ (เปิด DevTools → Network → Slow 3G แล้วกดโหลดข้อมูล) |
+| แสดงข้อความ error เมื่อเรียก API ไม่สำเร็จ | แปลง error ที่ `App.jsx:114-131` (เชื่อมต่อไม่ได้ / HTTP status / ข้อความจาก API) · แสดง: `App.jsx:496` (`role="alert"`) · ทุกฟังก์ชันเรียก `showStatus("error", …)` ใน `catch` เช่น `:193` `:239` `:298` `:342` `:402` `:418` `:452` | `[x]` อ่านโค้ด · `[ ]` ยืนยันในเบราว์เซอร์ (ปิด Backend แล้วโหลดหน้า ต้องเห็นข้อความ error สีแดง ไม่ขาวโล่ง) |
+| หน้าไม่ขาวเมื่อไม่ได้ตั้งค่า URL | `App.jsx:5-14` โยน error พร้อมข้อความภาษาไทยเมื่อไม่มี `VITE_BOOK_API_URL` / `VITE_CIRCULATION_API_URL` · ตัวอย่างค่าตั้ง: `frontend/.env.example` | `[x]` อ่านโค้ด · หมายเหตุ: ถ้าไม่มี `.env.local` ข้อความนี้ขึ้นใน console ไม่ใช่บนหน้าเว็บ ต้องคัดลอก `.env.example` เป็น `.env.local` ก่อนรัน |
+| แสดงผลอ่านง่าย (แท็บ, ตาราง, สถานะสรุป) | แท็บ: `App.jsx:27` · การ์ดสรุป: `:478-489` · ตารางประวัติ: `:837-838` | `[ ]` ตรวจสายตาในเบราว์เซอร์ |
+| จัดการกรณีไม่มีข้อมูล | `App.jsx:555` (ไม่มีหนังสือ) | `[x]` อ่านโค้ด |
 
-ผลการทดลองทั้ง 5 รายการทำงานได้ตามปกติ อย่างไรก็ตาม ควรทดสอบ Loading, Error และ Form Validation เพิ่มเติม เพื่อให้มีหลักฐานตรงตามเกณฑ์การให้คะแนนทั้ง 3 ด้าน
+### 3.3 แบบฟอร์มและการตรวจความถูกต้องเบื้องต้นฝั่ง Frontend
 
-**หลักฐานที่ควรเก็บก่อนส่ง**
-- ภาพหน้าจอรายการหนังสือและสมาชิก
-- ภาพหน้าจอหลังเพิ่มสมาชิกสำเร็จ
-- ภาพหน้าจอหลังทำรายการยืมและคืนหนังสือ
-- ภาพหน้าจอ Network ใน Developer Tools ที่แสดงคำขอ API และ HTTP status
-- ภาพหน้าจอข้อความ Error หรือ Validation เมื่อทดสอบกรณีผิดพลาด
+| Checklist | หลักฐาน | สถานะ |
+|---|---|---|
+| แบบฟอร์มสมาชิก (เพิ่ม/แก้ไข) | `App.jsx:609-611` (`<form onSubmit>`) · ช่องชื่อ `required` + `minLength={2}` `:620-621` · ช่องอีเมล `type="email"` `:629` และ `required` `:634` · ช่องโทรศัพท์ `type="tel"` `:642` | `[x]` อ่านโค้ด |
+| แบบฟอร์มยืมหนังสือ | `App.jsx:723` (`onSubmit={borrowBook}`) · `required` ที่ `:731` `:755` `:776` · ช่องวันที่ `type="date"` พร้อม `min` = วันนี้ `:770-772` · ปิดตัวเลือกหนังสือที่หมด `:739` · ปุ่มส่งปิดเมื่อไม่มีหนังสือหรือสมาชิก `:782` | `[x]` อ่านโค้ด |
+| ตรวจก่อนส่งด้วยโค้ด | ข้อมูลไม่ครบ: `App.jsx:359-361` · วันกำหนดคืนย้อนหลัง: `:363-365` | `[x]` อ่านโค้ด |
+| Backend ตรวจซ้ำ (ไม่เชื่อข้อมูลจาก Frontend อย่างเดียว) | อีเมลไม่ถูกต้อง `src/circulation/index.js:34-47` · วันที่ `:62` `:383` · อีเมลซ้ำ 409 `:75` `:147` `:214` | `[x]` รันทดสอบ: อีเมลผิดได้ 400, อีเมลซ้ำได้ 409 |
+| ทดสอบด้วยข้อมูลที่ไม่ถูกต้องผ่านหน้าเว็บ | | `[ ]` ทดสอบมือ: ชื่อ 1 ตัวอักษร, อีเมลไม่มี `@`, ยืมโดยเว้นช่อง, วันที่ย้อนหลัง ต้องเห็นข้อความเตือนและไม่มีคำขอไปที่ API (ดูใน Network) |
 
 ## 4. CLO7 — Project Defense (5 คะแนน)
 
-| Checklist | Evidence | Status |
+| Checklist | หลักฐาน / สิ่งที่ต้องเตรียม | สถานะ |
 |---|---|---|
-| เตรียม Demo สดที่ทำงานได้จริงภายใน 3–4 นาที | Demo plan และการทดลองระบบก่อนนำเสนอ | [x] มีลำดับการสาธิตแล้ว |
-| Demo ครอบคลุม Use Case หลักตั้งแต่ต้นจนจบ | ลำดับการเพิ่มสมาชิก ยืมหนังสือ และคืนหนังสือ | [x] มีลำดับการสาธิตแล้ว |
-| อธิบายสถาปัตยกรรมและหน้าที่ของแต่ละ Service ได้ | `src/index.js`, `src/circulation/index.js` และ `frontend/` | [ ] ทบทวนและฝึกอธิบาย |
-| อธิบายเหตุผลในการตัดสินใจทางเทคนิคได้ | โค้ด API, Database Transaction และการแยก Service ตามที่ใช้จริง | [ ] ทบทวนโค้ดก่อนนำเสนอ |
-| ตอบคำถามเกี่ยวกับระบบที่พัฒนาจริงได้ | โค้ด เอกสาร OpenAPI และผลทดสอบ | [ ] ฝึกตอบคำถามก่อนนำเสนอ |
+| Demo สดทำงานได้ | ลำดับ demo ในหัวข้อ 4.1 และการเปิดบริการทั้ง 3 ตามหัวข้อ 5 | `[ ]` ซ้อมให้จบใน 3–4 นาที |
+| อธิบายสถาปัตยกรรมและเหตุผลได้ | หัวข้อ 4.2 | `[ ]` ฝึกอธิบาย |
+| ตอบคำถามเรื่องระบบที่ตนเองพัฒนาได้ | หัวข้อ 4.3 | `[ ]` ฝึกตอบ |
 
-### 4.1 Suggested Demo Flow
+### 4.1 ลำดับ Demo (3–4 นาที)
 
-ใช้เวลาประมาณ 3–4 นาที โดยเรียงลำดับดังนี้
+1. เปิดหน้าเว็บ แสดงรายการหนังสือพร้อมจำนวนคงเหลือ
+2. แท็บสมาชิก เพิ่มสมาชิกใหม่ผ่านแบบฟอร์ม (ลองกรอกอีเมลผิดให้เห็นการตรวจสอบก่อน)
+3. แท็บยืมหนังสือ เลือกสมาชิกและหนังสือ ยืมแล้วกลับไปดูว่าจำนวนคงเหลือลดลง
+4. แท็บประวัติ ดูรายการยืม แล้วคืนหนังสือ ดูจำนวนคงเหลือกลับมา
+5. เปิด Swagger UI ที่ `/api-docs` ชี้ว่าเอกสารมาจากไฟล์เดียวกับที่ระบบใช้
+6. (ถ้ามีเวลา) เรียก `/api/books/3/external-info` ให้เห็นข้อมูลจาก Open Library และอธิบายว่าถ้า API ภายนอกล่มระบบตอบ fallback แทน
 
-1. เปิด Frontend และแสดงรายการหนังสือ
-2. แสดงรายการสมาชิกและเพิ่มสมาชิกผ่านแบบฟอร์ม
-3. เลือกสมาชิกและหนังสือเพื่อทำรายการยืม
-4. เปิดประวัติการยืมและตรวจสอบรายการ
-5. คืนหนังสือและตรวจสอบสถานะหรือจำนวนหนังสือคงเหลืออีกครั้ง
-6. สรุปหน้าที่ของ Frontend, Book API และ Circulation Service
+เตรียมข้อมูลก่อนขึ้นนำเสนอ: ตรวจว่าหนังสือที่จะยืมมี `available_copies` มากกว่า 0 และต้องมีสมาชิกอย่างน้อย 1 คน
 
-ก่อนนำเสนอควรเตรียมข้อมูลทดสอบไว้ล่วงหน้า ตรวจสอบว่าหนังสือมีจำนวนคงเหลือเพียงพอ และเปิดบริการทั้งสองตัวกับ Frontend ให้พร้อม
+### 4.2 สถาปัตยกรรม (ตอบตามที่ทำจริง)
 
-### 4.2 หัวข้อที่ควรเตรียมตอบคำถาม
+- **Book API** (พอร์ต 3000, `src/index.js`) จัดการหนังสือ ผู้แต่ง หมวดหมู่ และเรียก Open Library ผ่าน `src/services/external-api.js`
+- **Circulation Service** (พอร์ต 3001, `src/circulation/index.js`) จัดการสมาชิก การยืม การคืน และรายการเกินกำหนด
+- **Frontend** (React + Vite) เรียกทั้งสองบริการตรง ผ่าน CORS ไม่มี API Gateway
+- **ฐานข้อมูล** MySQL/MariaDB ชุดเดียว (`book_system`) ใช้ร่วมกันทั้งสองบริการ
 
-- เหตุผลที่แยก Book API และ Circulation Service
-- วิธีที่ Frontend เรียก API และจัดการผลตอบกลับ
-- หน้าที่ของ OpenAPI และ Swagger UI
-- ความแตกต่างระหว่าง Test Coverage กับการยืนยันว่าระบบไม่มี Bug
-- วิธีจัดการเมื่อ Backend หรือการเชื่อมต่อฐานข้อมูลเกิดข้อผิดพลาด
-- ปัญหาที่พบระหว่างพัฒนา วิธีแก้ไข และผลที่ได้จริง
+### 4.3 คำถามที่น่าจะถูกถาม
 
-## 5. Final Verification Before Submission
+| คำถาม | แนวตอบ (ตรงกับของจริง) |
+|---|---|
+| ทำไมแยก 2 บริการทั้งที่ใช้ฐานข้อมูลเดียว | แยกความรับผิดชอบ (แคตตาล็อก vs การยืมคืน) ให้พัฒนา ทดสอบ และรันแยกกันได้ ใช้ฐานข้อมูลร่วมเพราะการยืมต้องอัปเดต `books.available_copies` และเพิ่ม `loans` ในธุรกรรมเดียวกัน ถ้าแยกฐานข้อมูลต้องจัดการ distributed transaction ซึ่งเกินขอบเขตงานนี้ |
+| `microservices-design.md` มี API Gateway ทำไมของจริงไม่มี | เอกสารนั้นเป็นแบบเป้าหมาย ของที่ทำจริงคือ 2 บริการ ไม่มี Gateway และฐานข้อมูลเดียว |
+| ยืมหนังสือพร้อมกัน 2 คนจะเกิดอะไร | ใช้ transaction กับ `SELECT … FOR UPDATE` (`src/circulation/index.js:393`, `:412`) คนที่สองรอจนคนแรกเสร็จ แล้วเห็นจำนวนล่าสุด ถ้าหมดได้ 409 |
+| ทำไมวันที่ถึงต้องตั้ง `dateStrings` | `mysql2` แปลง `DATE` เป็น `Date` ของ JavaScript ตามเขตเวลา ทำให้เครื่องที่เป็น UTC+7 แสดงวันที่ถอยหลัง 1 วัน (`src/db.js:15`) |
+| ถ้า Open Library ล่มเกิดอะไร | ลอง 3 ครั้ง (รอ 300 ms แล้ว 600 ms) timeout 3 วินาทีต่อครั้ง ไม่ retry เมื่อได้ 4xx แล้วตอบ HTTP 200 พร้อม `source: "fallback"` และข้อมูลหนังสือในระบบ (`src/services/external-api.js`) |
+| Coverage 90% แปลว่าไม่มีบั๊กไหม | ไม่ใช่ แปลว่าโค้ดส่วนนั้นถูกเรียกขณะทดสอบ และชุดทดสอบ mock ฐานข้อมูล จึงไม่ยืนยันพฤติกรรมกับฐานข้อมูลจริง ทั้งโครงการ (นับ `db.js` และ `external-api.js`) ได้ 78.97% |
+| Swagger/OpenAPI ช่วยอะไร | เป็นสัญญาของ API ที่อ่านโดยคนและเครื่อง Swagger UI อ่านจากไฟล์ `openapi.yaml` เดียวกัน ทดลองเรียกได้ทันที |
 
-### CLO8 — Final Integration
+## 5. ขั้นตอนตรวจก่อนส่ง
 
-- [ ] รัน `npm test` และบันทึกผลล่าสุด
-- [ ] ตรวจสอบให้ `coverage-report.md` และ Checklist ใช้ตัวเลขตรงกัน
-- [ ] ตรวจตำแหน่งที่ยังไม่ครอบคลุมจาก `coverage/index.html`
-- [ ] ตรวจว่าไม่มี merge conflict หลงเหลือในไฟล์โค้ด
-- [ ] ตรวจ endpoints ใน `openapi.yaml` เทียบกับ routes จริง รวม Circulation Service
-- [ ] ทดลองรัน Book API และ Circulation Service ร่วมกัน
+### 5.1 ทดสอบโคลนใหม่ตั้งแต่ศูนย์ (ทำให้จบก่อนติ๊ก `[ ]` ข้างบน)
 
-### CLO6 — Frontend
-
-- [x] ทดลองดูรายการหนังสือและสมาชิก
-- [x] ทดลองเพิ่มสมาชิกผ่านแบบฟอร์ม
-- [x] ทดลองยืมและคืนหนังสือ
-- [ ] ทดสอบ Loading และ Error Handling
-- [ ] ทดสอบ Form Validation ด้วยข้อมูลที่ไม่ถูกต้อง
-- [ ] เก็บภาพหน้าจอหรือหลักฐานการเรียก API จริง
-
-### CLO7 — Project Defense
-
-- [ ] ซ้อม Demo ให้เสร็จภายใน 3–4 นาที
-- [ ] เตรียมข้อมูลตัวอย่างสำหรับการสาธิต
-- [ ] ฝึกอธิบายสถาปัตยกรรมและเหตุผลการออกแบบ
-- [ ] ฝึกตอบคำถามเกี่ยวกับ API, Microservices, Database และ Test Coverage
-
-### ตรวจสอบไฟล์ส่งงาน
-
-- [ ] ตรวจว่าโครงสร้างโฟลเดอร์ตรงตามที่ผู้สอนกำหนด
-- [ ] ตรวจว่ามีไฟล์ `openapi.yaml`, `coverage-report.md` และ `clo-requirements-checklist.md`
-- [ ] ตรวจว่ามี `package.json` และ `package-lock.json` ตามที่จำเป็น
-- [ ] ตรวจว่าไม่มีไฟล์ลับ เช่น `.env` หรือ credentials อยู่ในชุดส่งงาน
-
-## 6. Expected Submission Structure
-
-```text
-project-phase3-<student-id>/
-├── src/
-├── frontend/
-├── openapi.yaml
-├── coverage-report.md
-├── clo-requirements-checklist.md
-├── package.json
-└── package-lock.json
+```cmd
+git clone https://github.com/Sirapob0110/library_book_system test-clone
+cd test-clone
+npm install
+copy .env.example .env
+C:\xampp\mysql\bin\mysql.exe -u root --default-character-set=utf8mb4 < schema.sql
+C:\xampp\mysql\bin\mysql.exe -u root --default-character-set=utf8mb4 < seed.sql
+npm test
 ```
 
-สามารถแนบไฟล์ประกอบอื่นตามความเหมาะสมและข้อกำหนดของผู้สอน เช่น
+เปิดอีก 3 หน้าต่าง
 
-- `tests/`
-- `schema.sql`
-- `seed.sql`
-- `requirement.md`
-- `postman_collection.json`
-- หลักฐานผลการทดสอบและภาพหน้าจอการทำงานของระบบ
+```cmd
+npm start
+npm run start:circulation
+cd frontend && npm install && copy .env.example .env.local && npm run dev
+```
 
-## 7. Conclusion
+### 5.2 รายการตรวจ
 
-Checklist ฉบับนี้จัดหมวดหมู่ตาม Rubric ของโครงงานระยะที่ 3 ได้แก่ CLO8 สำหรับ Final Integration, CLO6 สำหรับ Client-Facing Frontend และ CLO7 สำหรับ Project Defense โดยแยกรายการที่มีหลักฐานการทดลองแล้วออกจากรายการที่ยังต้องตรวจสอบเพิ่มเติม
+CLO8
 
-ผลการทดลอง Frontend ทั้ง 5 รายการเป็นหลักฐานเบื้องต้นว่าระบบสามารถใช้งานตาม Use Case หลักได้ ส่วน OpenAPI, Coverage, Loading/Error Handling, Form Validation และการเตรียมตอบคำถามควรตรวจยืนยันตามรายการก่อนส่งงานจริง
+- [x] รัน `npm test` ผ่าน 69/69 และตัวเลขตรงกับ `coverage-report.md`
+- [x] ไม่มี merge conflict หลงเหลือ
+- [x] route ในโค้ดตรงกับ `openapi.yaml` ครบ 20 รายการ
+- [ ] โคลนใหม่แล้วรันครบทั้ง 3 บริการได้ (หัวข้อ 5.1)
+- [ ] เปิด Swagger UI ทั้งพอร์ต 3000 และ 3001 ได้
 
-การทำเครื่องหมายว่าผ่านขั้นสุดท้ายต้องอ้างอิงจากผลทดสอบและหลักฐานล่าสุดของโปรเจกต์
+CLO6
+
+- [ ] ดูหนังสือ / ดูสมาชิก / เพิ่มสมาชิก / ยืม / คืน ผ่านหน้าเว็บ
+- [ ] ปิด Backend แล้วเปิดหน้าเว็บ เห็นข้อความ error ชัดเจน
+- [ ] เห็นสถานะ loading ตอนโหลด (ใช้ Slow 3G ใน DevTools)
+- [ ] ฟอร์มกันข้อมูลผิดก่อนส่ง (ชื่อสั้น, อีเมลผิด, ช่องว่าง, วันที่ย้อนหลัง)
+- [ ] เก็บภาพหน้าจอ: รายการหนังสือ, หลังเพิ่มสมาชิก, หลังยืมและคืน, Network ที่เห็น HTTP status, ข้อความ error/validation
+
+CLO7
+
+- [ ] ซ้อม demo ให้จบใน 3–4 นาที
+- [ ] ฝึกตอบคำถามในหัวข้อ 4.3
+
+ไฟล์ส่งงาน
+
+- [ ] ลบ `src/index.circulation-backup.js` และโฟลเดอร์ `coverage/` ที่ถูก commit ทั้งที่อยู่ใน `.gitignore` (`git rm -r --cached coverage`)
+- [ ] ไม่มี `.env` หรือรหัสผ่านใน repo
+- [ ] โครงสร้างตรงตามที่กำหนด: `src/`, `frontend/`, `openapi.yaml`, `coverage-report.md`, `clo-requirements-checklist.md`, `package.json`
