@@ -15,7 +15,10 @@ function getApiUrl(value, name) {
   return url.replace(/\/+$/, "");
 }
 
-export const BOOK_API = getApiUrl(import.meta.env.VITE_BOOK_API_URL, "VITE_BOOK_API_URL");
+export const BOOK_API = getApiUrl(
+  import.meta.env.VITE_BOOK_API_URL,
+  "VITE_BOOK_API_URL",
+);
 export const CIRCULATION_API = getApiUrl(
   import.meta.env.VITE_CIRCULATION_API_URL,
   "VITE_CIRCULATION_API_URL",
@@ -45,14 +48,18 @@ async function parse(response) {
 }
 
 function messageOf(result, response) {
-  return result.error || result.message || `API ตอบกลับด้วย HTTP ${response.status}`;
+  return (
+    result.error || result.message || `API ตอบกลับด้วย HTTP ${response.status}`
+  );
 }
 
+// credentials: "include" ใช้เฉพาะเส้นทาง /api/auth/* (ต้องส่ง/รับ cookie refresh token)
+// คำขอข้อมูลทั่วไปใช้ header Authorization อย่างเดียว จึงไม่ต้องพึ่ง CORS แบบ credentials
+// (ทำให้ยังใช้งานได้แม้ตั้ง VITE_CIRCULATION_API_URL ชี้ตรงไป :3001 แทน Gateway)
 async function send(url, options = {}) {
   try {
     return await fetch(url, {
       ...options,
-      credentials: "include",
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -77,7 +84,10 @@ export function refreshSession() {
 
 async function doRefresh() {
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await send(`${BOOK_API}/api/auth/refresh`, { method: "POST" });
+    const response = await send(`${BOOK_API}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
 
     if (response.ok) {
       const { data } = await parse(response);
@@ -120,7 +130,8 @@ export async function apiRequest(url, options = {}) {
   const result = await parse(response);
 
   if (!response.ok) throw new Error(messageOf(result, response));
-  if (result.success === false) throw new Error(result.error || result.message || "คำขอไม่สำเร็จ");
+  if (result.success === false)
+    throw new Error(result.error || result.message || "คำขอไม่สำเร็จ");
 
   return result;
 }
@@ -129,12 +140,17 @@ export async function apiRequest(url, options = {}) {
 export async function authPost(path, body) {
   const response = await send(`${BOOK_API}${path}`, {
     method: "POST",
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const result = await parse(response);
 
   if (!response.ok || result.success === false) {
-    throw new Error(result.message || result.error || `API ตอบกลับด้วย HTTP ${response.status}`);
+    throw new Error(
+      result.message ||
+        result.error ||
+        `API ตอบกลับด้วย HTTP ${response.status}`,
+    );
   }
 
   return result.data;
