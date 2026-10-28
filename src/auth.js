@@ -17,7 +17,8 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV !== "test") {
 
 const ROLES = { ADMIN: "admin", USER: "user" };
 
-// สร้าง token จากข้อมูลผู้ใช้ (ไม่ใส่รหัสผ่านหรือ hash ลงใน token)
+// สร้าง access token (อายุสั้น 15 นาที) จากข้อมูลผู้ใช้ (ไม่ใส่รหัสผ่านหรือ hash ลงใน token)
+// ต่ออายุเซสชันด้วย refresh token ที่เก็บใน cookie httpOnly (ดู src/auth-routes.js)
 function signToken(user) {
   return jwt.sign(
     {
@@ -27,7 +28,7 @@ function signToken(user) {
       member_id: user.member_id ?? null,
     },
     getSecret(),
-    { expiresIn: process.env.JWT_EXPIRES_IN || "2h" },
+    { expiresIn: process.env.JWT_EXPIRES_IN || "15m" },
   );
 }
 
@@ -73,4 +74,10 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { ROLES, signToken, authenticate, requireRole, deny };
+// จำนวนวินาทีที่ access token ใช้ได้ (อ่านจาก token ที่เพิ่งออก)
+function secondsToExpiry(token) {
+  const { iat, exp } = jwt.decode(token);
+  return exp - iat;
+}
+
+module.exports = { ROLES, signToken, secondsToExpiry, authenticate, requireRole, deny };

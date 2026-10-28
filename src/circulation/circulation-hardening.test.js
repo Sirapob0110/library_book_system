@@ -156,6 +156,7 @@ describe("Circulation Service: ความปลอดภัยและกา�
 
       connection.query
         .mockResolvedValueOnce([[{ member_id: 1 }]])
+        .mockResolvedValueOnce([[{ n: 0 }]]) // นับเล่มที่ค้างอยู่ของสมาชิก
         .mockResolvedValueOnce([[{ book_id: 2, total_copies: 3, available_copies: 2 }]])
         .mockResolvedValueOnce([{ insertId: 1 }])
         .mockResolvedValueOnce([{ affectedRows: 1 }]);
@@ -180,6 +181,7 @@ describe("Circulation Service: ความปลอดภัยและกา�
       const invalidate = jest.spyOn(cache, "invalidate").mockResolvedValue(undefined);
       connection.query
         .mockResolvedValueOnce([[{ member_id: 1 }]])
+        .mockResolvedValueOnce([[{ n: 0 }]]) // นับเล่มที่ค้างอยู่ของสมาชิก
         .mockResolvedValueOnce([[{ book_id: 2, total_copies: 3, available_copies: 2 }]])
         .mockResolvedValueOnce([{ insertId: 1 }])
         .mockResolvedValueOnce([{ affectedRows: 1 }]);
@@ -206,6 +208,7 @@ describe("Circulation Service: ความปลอดภัยและกา�
       const invalidate = jest.spyOn(cache, "invalidate").mockResolvedValue(undefined);
       connection.query
         .mockResolvedValueOnce([[{ member_id: 1 }]])
+        .mockResolvedValueOnce([[{ n: 0 }]]) // นับเล่มที่ค้างอยู่ของสมาชิก
         .mockResolvedValueOnce([[{ book_id: 2, total_copies: 3, available_copies: 0 }]]);
 
       const res = await as(app, admin)

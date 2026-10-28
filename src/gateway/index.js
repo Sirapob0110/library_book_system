@@ -11,6 +11,8 @@ const axios = require("axios");
 const { authenticate } = require("../auth");
 const { generalLimiter } = require("../middlewares/rate-limiter");
 const { notFound, errorHandler } = require("../middlewares/errors");
+const { requestId, requestLogger } = require("../middlewares/request-log");
+const { requireTrustedOrigin } = require("../middlewares/same-origin");
 
 const PORT = Number(process.env.GATEWAY_PORT) || 8000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
@@ -31,7 +33,14 @@ const ROUTES = [
 ];
 
 // เฉพาะการสมัครและเข้าสู่ระบบที่เรียกได้โดยไม่มี token (/auth/me ต้องมี token)
-const PUBLIC_PATHS = new Set(["/api/auth/login", "/api/auth/register"]);
+const PUBLIC_PATHS = new Set([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/refresh", // ใช้ cookie refresh token แทน Authorization
+  "/api/auth/logout",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+]);
 
 // header จากบริการปลายทางที่ส่งต่อให้ผู้เรียกด้วย
 const PASS_HEADERS = [
@@ -40,6 +49,8 @@ const PASS_HEADERS = [
   "ratelimit",
   "ratelimit-policy",
   "retry-after",
+  "x-request-id",
+  "set-cookie", // cookie refresh token จาก Book API ส่งต่อถึงเบราว์เซอร์
 ];
 
 const app = express();
@@ -50,22 +61,15 @@ app.use(
   cors({
     origin: FRONTEND_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+    credentials: true,
+    exposedHeaders: ["X-Request-Id"],
   }),
 );
 
-// log กลาง: method, path, status, เวลาที่ใช้ (ปิดตอนทดสอบ)
-app.use((req, res, next) => {
-  const started = process.hrtime.bigint();
-
-  res.on("finish", () => {
-    if (process.env.NODE_ENV === "test") return;
-    const ms = Number(process.hrtime.bigint() - started) / 1e6;
-    console.log(`[gateway] ${req.method} ${req.originalUrl} ${res.statusCode} ${ms.toFixed(1)}ms`);
-  });
-
-  next();
-});
+// log กลาง (JSON): requestId, method, path, status, เวลาที่ใช้ — id นี้ถูกส่งต่อให้บริการปลายทางด้วย
+app.use(requestId);
+app.use(requestLogger("api-gateway"));
 
 app.use(express.json({ limit: "10kb" }));
 
@@ -104,9 +108,11 @@ function serviceUnavailable(res, message) {
 
 function proxyTo(route) {
   return async (req, res) => {
-    const headers = { "X-Forwarded-For": req.ip };
+    const headers = { "X-Forwarded-For": req.ip, "X-Request-Id": req.id };
     if (req.headers.authorization) headers.Authorization = req.headers.authorization;
     if (req.headers["content-type"]) headers["Content-Type"] = req.headers["content-type"];
+    // cookie ส่งต่อเฉพาะเส้นทาง /api/auth (ที่เดียวที่ใช้ refresh token) ไม่ส่งให้บริการอื่น
+    if (route.public && req.headers.cookie) headers.Cookie = req.headers.cookie;
 
     const hasBody = !["GET", "HEAD", "DELETE"].includes(req.method);
 
@@ -126,7 +132,9 @@ function proxyTo(route) {
 
       return res.status(upstream.status).send(upstream.data);
     } catch (err) {
-      console.error(`[gateway] เรียก ${route.target} ไม่สำเร็จ: ${err.code || err.message}`);
+      console.error(
+        JSON.stringify({ level: "error", service: "api-gateway", requestId: req.id, message: `เรียก ${route.target} ไม่สำเร็จ`, code: err.code || err.message }),
+      );
 
       const timedOut = err.code === "ECONNABORTED" || err.code === "ETIMEDOUT";
       return serviceUnavailable(
@@ -138,6 +146,9 @@ function proxyTo(route) {
     }
   };
 }
+
+// เส้นทางที่ใช้ cookie ต้องมาจากหน้าเว็บของเราเท่านั้น (ตรวจที่ Gateway ก่อนส่งต่อ)
+app.post(["/api/auth/refresh", "/api/auth/logout"], requireTrustedOrigin);
 
 for (const route of ROUTES) {
   const guard = (req, res, next) =>

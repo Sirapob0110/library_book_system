@@ -27,6 +27,7 @@ CREATE TABLE books (
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   total_copies     INT NOT NULL DEFAULT 1,
   available_copies INT NOT NULL DEFAULT 1,
+  deleted_at     DATETIME NULL DEFAULT NULL, -- ลบแบบเก็บร่องรอย (หนังสือที่เคยมีประวัติการยืม)
   CONSTRAINT uq_books_isbn UNIQUE (isbn),
   CONSTRAINT fk_books_author FOREIGN KEY (author_id) REFERENCES authors(author_id)
     ON DELETE CASCADE ON UPDATE CASCADE
@@ -52,6 +53,7 @@ CREATE TABLE members (
   name      VARCHAR(150) NOT NULL,
   email     VARCHAR(150) NOT NULL,
   phone     VARCHAR(20) DEFAULT NULL,
+  deleted_at DATETIME NULL DEFAULT NULL, -- ลบแบบเก็บร่องรอย (สมาชิกที่เคยมีประวัติการยืม)
   UNIQUE KEY email (email)
 ) ENGINE=InnoDB;
 
@@ -79,4 +81,31 @@ CREATE TABLE users (
   UNIQUE KEY uq_users_username (username),
   CONSTRAINT fk_users_member FOREIGN KEY (member_id) REFERENCES members(member_id)
     ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- ===== Refresh token และการรีเซ็ตรหัสผ่าน =====
+CREATE TABLE refresh_tokens (
+  token_id   INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,          -- sha256 ของ token (ไม่เก็บ token จริง)
+  family_id  CHAR(36) NOT NULL,          -- ทุก token ที่ต่อกันจากการ login ครั้งเดียว (ใช้เพิกถอนทั้งชุดเมื่อพบการใช้ซ้ำ)
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_refresh_hash (token_hash),
+  KEY idx_refresh_user (user_id),
+  KEY idx_refresh_family (family_id),
+  CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE password_resets (
+  reset_id   INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,          -- sha256 ของ token ที่ส่งให้ผู้ใช้
+  expires_at DATETIME NOT NULL,
+  used_at    DATETIME NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_reset_hash (token_hash),
+  KEY idx_reset_user (user_id),
+  CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

@@ -24,7 +24,10 @@ function errorHandler(err, req, res, next) {
   const status = err.status || err.statusCode || 500;
 
   if (status >= 500) {
-    console.error(err);
+    // log เป็น JSON พร้อม requestId เพื่อไล่ข้ามบริการได้ (ผู้ใช้เห็นเพียงข้อความทั่วไป)
+    console.error(
+      JSON.stringify({ level: "error", requestId: req.id, message: err.message, stack: err.stack }),
+    );
     return send(res, 500, "INTERNAL_SERVER_ERROR", "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์");
   }
 

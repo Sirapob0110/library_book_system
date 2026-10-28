@@ -1,0 +1,66 @@
+# รันทั้งระบบด้วยคำสั่งเดียว: docker compose up --build
+# ฐานข้อมูลจะถูกสร้างจาก schema.sql + seed.sql ครั้งแรกที่เริ่ม (ถ้าต้องการสร้างใหม่: docker compose down -v)
+# หน้าเว็บ (frontend) ยังรันบนเครื่องด้วย npm run dev โดยชี้ไปที่ http://localhost:8000
+x-app: &app
+  build: .
+  restart: unless-stopped
+  environment: &env
+    DB_HOST: db
+    DB_USER: root
+    DB_PASSWORD: ${DB_PASSWORD:-rootpass}
+    DB_NAME: book_system
+    JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+    # image ตั้ง NODE_ENV=production ไว้; compose นี้เป็นชุดสำหรับพัฒนา จึงใช้ development (ตัวตรวจความปลอดภัยของ production จะไม่บล็อก)
+    # ถ้านำไปใช้จริงให้ตั้ง NODE_ENV=production + JWT_SECRET สุ่ม + เปลี่ยนรหัส admin ด้วย npm run set-password
+    NODE_ENV: ${NODE_ENV:-development}
+    REDIS_URL: redis://redis:6379
+    FRONTEND_ORIGIN: http://localhost:5173
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  db:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+
+  book:
+    <<: *app
+    command: ["node", "src/index.js"]
+    ports: ["3000:3000"]
+
+  circulation:
+    <<: *app
+    command: ["node", "src/circulation/index.js"]
+    ports: ["3001:3001"]
+
+  gateway:
+    <<: *app
+    command: ["node", "src/gateway/index.js"]
+    environment:
+      <<: *env
+      BOOK_SERVICE_URL: http://book:3000
+      CIRCULATION_SERVICE_URL: http://circulation:3001
+    ports: ["8000:8000"]
+    depends_on:
+      - book
+      - circulation
+
+volumes:
+  dbdata:

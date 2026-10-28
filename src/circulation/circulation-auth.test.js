@@ -99,6 +99,7 @@ describe("Circulation Service: สิทธิ์ตามบทบาท", () =
     function mockSuccessfulLoan() {
       connection.query
         .mockResolvedValueOnce([[{ member_id: 1 }]])
+        .mockResolvedValueOnce([[{ n: 0 }]]) // นับเล่มที่ค้างอยู่ของสมาชิก
         .mockResolvedValueOnce([[{ book_id: 1, total_copies: 3, available_copies: 2 }]])
         .mockResolvedValueOnce([{ insertId: 10 }])
         .mockResolvedValueOnce([{ affectedRows: 1 }]);

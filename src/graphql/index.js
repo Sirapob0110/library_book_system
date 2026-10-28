@@ -5,6 +5,7 @@ const { parse, validate, execute, specifiedRules, GraphQLError, Kind } = require
 
 const pool = require("../db");
 const catalog = require("../services/catalog");
+const { ServiceError } = require("../services/errors");
 const { bookSchema, authorSchema, categorySchema } = require("../schemas/catalog");
 const { schema } = require("./schema");
 
@@ -75,7 +76,7 @@ function createLoaders() {
     booksOfAuthor: createLoader(async (ids) => {
       const [rows] = await pool.query(
         `SELECT book_id, title, isbn, published_year, price, total_copies, available_copies, author_id
-         FROM books WHERE author_id IN (?) ORDER BY book_id`,
+         FROM books WHERE author_id IN (?) AND deleted_at IS NULL ORDER BY book_id`,
         [ids],
       );
       const grouped = groupBy(rows, "author_id");
@@ -141,6 +142,7 @@ function wrap(resolver) {
       return await resolver(args, ctx, info);
     } catch (err) {
       if (err instanceof GraphQLError) throw err;
+      if (err instanceof ServiceError) throw fail(err.message, err.code || "CONFLICT");
       if (err.code === "ER_DUP_ENTRY") throw fail("ข้อมูลซ้ำ (เช่น ISBN หรือชื่อหมวดหมู่มีอยู่แล้ว)", "CONFLICT");
       if (err.code === "ER_NO_REFERENCED_ROW_2") {
         throw fail("authorId หรือ categoryIds ที่ระบุไม่มีอยู่ในระบบ", "BAD_REFERENCE");
@@ -212,7 +214,12 @@ const rootValue = {
     const deleted = await catalog.deleteBook(id);
 
     return deleted
-      ? { success: true, message: `ลบหนังสือ ID ${id} แล้ว` }
+      ? {
+          success: true,
+          message: deleted.archived
+            ? `ลบหนังสือ ID ${id} แล้ว (เก็บเป็นประวัติเพราะเคยมีการยืม)`
+            : `ลบหนังสือ ID ${id} แล้ว`,
+        }
       : { success: false, message: `ไม่พบหนังสือ ID ${id}` };
   }),
 

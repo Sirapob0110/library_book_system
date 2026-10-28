@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { dateOnly, fineText } from "./format";
 
 const EMPTY_BOOK = {
   title: "",
@@ -58,8 +59,8 @@ export default function AdminCatalog({
     setLoading(true);
 
     try {
-      await task();
-      showStatus("success", successText);
+      const custom = await task();
+      showStatus("success", typeof custom === "string" ? custom : successText);
       return true;
     } catch (err) {
       showStatus("error", err.message || failText);
@@ -148,11 +149,15 @@ export default function AdminCatalog({
 
     const deleted = await run(
       async () => {
-        await request(
+        const result = await request(
           `${bookApi}/api/books/${encodeURIComponent(book.book_id)}`,
           { method: "DELETE" },
         );
         await reloadBooks();
+        // หนังสือที่มีประวัติการยืมจะถูกเก็บเข้าคลัง (ซ่อน) แทนการลบจริง
+        return result.archived
+          ? `เก็บหนังสือ "${book.title}" เข้าคลังแล้ว (มีประวัติการยืม จึงไม่ลบถาวร)`
+          : undefined;
       },
       `ลบหนังสือ "${book.title}" สำเร็จ`,
       "ลบหนังสือไม่สำเร็จ",
@@ -489,6 +494,7 @@ export function OverdueLoans({ request, circulationApi, loading, showStatus }) {
                   <th>สมาชิก</th>
                   <th>หนังสือ</th>
                   <th>กำหนดคืน</th>
+                  <th>ค่าปรับ</th>
                 </tr>
               </thead>
               <tbody>
@@ -497,7 +503,8 @@ export function OverdueLoans({ request, circulationApi, loading, showStatus }) {
                     <td>{loan.loan_id}</td>
                     <td>{loan.member_name}</td>
                     <td>{loan.title}</td>
-                    <td>{String(loan.due_date).slice(0, 10)}</td>
+                    <td>{dateOnly(loan.due_date)}</td>
+                    <td>{fineText(loan) || "—"}</td>
                   </tr>
                 ))}
               </tbody>

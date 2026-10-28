@@ -106,7 +106,7 @@ describe("Book API", () => {
 
       expect(res.status).toBe(200);
       expect(pool.query).toHaveBeenCalledWith(
-        expect.stringContaining("WHERE (b.title LIKE ? OR a.name LIKE ?)"),
+        expect.stringContaining("WHERE b.deleted_at IS NULL AND (b.title LIKE ? OR a.name LIKE ?)"),
         ["%Test%", "%Test%"],
       );
     });
@@ -453,33 +453,114 @@ describe("Book API", () => {
   // ---------- DELETE BOOK ----------
 
   describe("DELETE /api/books/:id", () => {
-    test("deletes a book successfully", async () => {
-      pool.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    // ลบหนังสือใช้ transaction: ล็อกแถว -> นับประวัติการยืม (ทั้งหมด/ค้างอยู่) -> ลบจริงหรือตั้ง deleted_at
+    const locked = [[{ book_id: 1 }]];
+    const loanCounts = (total, active) => [[{ total, active }]];
+
+    test("ไม่เคยถูกยืม: ลบจริง (archived=false)", async () => {
+      mockConnection();
+      conn.query
+        .mockResolvedValueOnce(locked)
+        .mockResolvedValueOnce(loanCounts(0, 0))
+        .mockResolvedValueOnce([{ affectedRows: 1 }]);
 
       const res = await as(app, admin).delete("/api/books/1");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.deleted_book_id).toBe(1);
+      expect(res.body.data).toEqual({ deleted_book_id: 1, archived: false });
+      expect(conn.query.mock.calls[2][0]).toMatch(/DELETE FROM books/);
+      expect(conn.commit).toHaveBeenCalled();
+      expect(conn.release).toHaveBeenCalled();
     });
 
-    test("returns 404 when the book does not exist", async () => {
-      pool.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+    test("เคยถูกยืมและคืนครบแล้ว: ลบแบบเก็บประวัติ (ตั้ง deleted_at ไม่ลบแถว)", async () => {
+      mockConnection();
+      conn.query
+        .mockResolvedValueOnce(locked)
+        .mockResolvedValueOnce(loanCounts(4, 0))
+        .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+      const res = await as(app, admin).delete("/api/books/1");
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.archived).toBe(true);
+      expect(conn.query.mock.calls[2][0]).toMatch(/UPDATE books SET deleted_at = NOW\(\)/);
+      expect(conn.query.mock.calls.some((c) => /DELETE FROM books/.test(c[0]))).toBe(false);
+    });
+
+    test("ยังมีผู้ยืมค้างอยู่: 409 BOOK_HAS_ACTIVE_LOANS และไม่แก้ข้อมูล", async () => {
+      mockConnection();
+      conn.query.mockResolvedValueOnce(locked).mockResolvedValueOnce(loanCounts(3, 1));
+
+      const res = await as(app, admin).delete("/api/books/1");
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("BOOK_HAS_ACTIVE_LOANS");
+      expect(res.body.success).toBe(false);
+      expect(conn.query).toHaveBeenCalledTimes(2);
+      expect(conn.rollback).toHaveBeenCalled();
+      expect(conn.commit).not.toHaveBeenCalled();
+    });
+
+    test("returns 404 when the book does not exist (หรือถูกลบไปแล้ว)", async () => {
+      mockConnection();
+      conn.query.mockResolvedValueOnce([[]]);
 
       const res = await as(app, admin).delete("/api/books/99999");
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
+      expect(conn.rollback).toHaveBeenCalled();
     });
 
-    test("returns 500 when delete query fails", async () => {
+    test("returns 500 และ rollback เมื่อ query ล้มเหลวระหว่างลบ", async () => {
       const log = jest.spyOn(console, "error").mockImplementation(() => {});
-      pool.query.mockRejectedValueOnce(new Error("Database error"));
+      mockConnection();
+      conn.query.mockResolvedValueOnce(locked).mockRejectedValueOnce(new Error("Database error"));
+
+      const res = await as(app, admin).delete("/api/books/1");
+
+      expect(res.status).toBe(500);
+      expect(conn.rollback).toHaveBeenCalled();
+      expect(conn.release).toHaveBeenCalled();
+      log.mockRestore();
+    });
+
+    test("returns 500 เมื่อเชื่อมต่อฐานข้อมูลไม่ได้ (ไม่ค้าง)", async () => {
+      const log = jest.spyOn(console, "error").mockImplementation(() => {});
+      pool.getConnection.mockRejectedValueOnce(new Error("Database error"));
 
       const res = await as(app, admin).delete("/api/books/1");
 
       expect(res.status).toBe(500);
       log.mockRestore();
+    });
+  });
+
+  describe("หนังสือที่ถูกลบแบบเก็บประวัติ (soft delete)", () => {
+    test("รายการ รายละเอียด และหนังสือของผู้แต่ง กรอง deleted_at IS NULL", async () => {
+      mockBookList([]);
+      await as(app, admin).get("/api/books");
+      expect(pool.query.mock.calls[0][0]).toMatch(/b\.deleted_at IS NULL/);
+
+      pool.query.mockResolvedValueOnce([[]]);
+      await as(app, admin).get("/api/books/7");
+      expect(pool.query.mock.calls[2][0]).toMatch(/b\.deleted_at IS NULL/);
+
+      pool.query.mockResolvedValueOnce([[{ author_id: 1, name: "A" }]]).mockResolvedValueOnce([[]]);
+      await as(app, admin).get("/api/authors/1/books");
+      expect(pool.query.mock.calls[4][0]).toMatch(/deleted_at IS NULL/);
+    });
+
+    test("แก้ไขหนังสือที่ถูกลบแล้วได้ 404", async () => {
+      mockConnection();
+      conn.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+
+      const res = await as(app, admin).put("/api/books/1").send(validBook);
+
+      expect(res.status).toBe(404);
+      expect(conn.query.mock.calls[0][0]).toMatch(/deleted_at IS NULL/);
     });
   });
 

@@ -50,4 +50,12 @@ const registerLimiter = rateLimit({
   message: tooMany("สมัครสมาชิกถี่เกินไป กรุณาลองใหม่ใน 15 นาที"),
 });
 
-module.exports = { generalLimiter, loginLimiter, registerLimiter };
+// ขอรีเซ็ตรหัสผ่าน / ตั้งรหัสใหม่: 5 ครั้งต่อ 15 นาทีต่อ IP (กันการยิงถล่มและการเดา token)
+const resetLimiter = rateLimit({
+  ...shared,
+  windowMs: 15 * 60 * 1000,
+  limit: limitFrom("RESET_RATE_LIMIT_MAX", 5),
+  message: tooMany("ทำรายการรีเซ็ตรหัสผ่านถี่เกินไป กรุณาลองใหม่ใน 15 นาที"),
+});
+
+module.exports = { generalLimiter, loginLimiter, registerLimiter, resetLimiter };

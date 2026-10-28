@@ -3,21 +3,22 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const morgan = require("morgan");
-const bcrypt = require("bcryptjs");
+const { requestId, requestLogger } = require("./middlewares/request-log");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 
 const pool = require("./db");
 const { lookupBookByIsbn } = require("./services/external-api");
-const { signToken, authenticate, requireRole } = require("./auth");
+const { authenticate, requireRole } = require("./auth");
+const authRoutes = require("./auth-routes");
+const { runSecurityCheck } = require("./security-check");
 const catalog = require("./services/catalog");
-const { generalLimiter, loginLimiter, registerLimiter } = require("./middlewares/rate-limiter");
+const { generalLimiter } = require("./middlewares/rate-limiter");
 const { notFound, errorHandler } = require("./middlewares/errors");
 const { validateBody } = require("./schemas/validate");
 const { bookSchema, authorSchema, categorySchema } = require("./schemas/catalog");
-const { registerSchema, loginSchema } = require("./schemas/user");
 const { graphqlHandler } = require("./graphql");
+const { ServiceError } = require("./services/errors");
 
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 const adminOnly = [authenticate, requireRole("admin")];
@@ -33,10 +34,13 @@ app.use(
   cors({
     origin: FRONTEND_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+    credentials: true, // ให้เบราว์เซอร์ส่ง cookie refresh token ข้ามพอร์ต (origin ถูกจำกัดไว้ที่ FRONTEND_ORIGIN)
+    exposedHeaders: ["X-Request-Id"],
   }),
 );
-if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+app.use(requestId);
+app.use(requestLogger("book-api"));
 app.use(express.json({ limit: "10kb" })); // ข้อมูลเกิน 10KB ตอบ 413
 
 // ---------- Health check (ใช้โดย Gateway และเครื่องมือเฝ้าระวัง) ----------
@@ -59,6 +63,12 @@ const fail = (res, status, message) =>
   res.status(status).json({ success: false, message });
 
 function handleDbError(res, err) {
+  if (err instanceof ServiceError) {
+    return res
+      .status(err.status)
+      .json({ success: false, message: err.message, error: err.message, ...(err.code ? { code: err.code } : {}) });
+  }
+
   if (err.code === "ER_DUP_ENTRY") {
     return fail(res, 409, "ข้อมูลซ้ำ (เช่น ISBN หรือชื่อหมวดหมู่มีอยู่แล้ว)");
   }
@@ -130,11 +140,11 @@ app.put("/api/books/:id", ...adminOnly, validateBody(bookSchema), async (req, re
 // 5) ลบหนังสือ
 app.delete("/api/books/:id", ...adminOnly, async (req, res) => {
   try {
-    if (!(await catalog.deleteBook(req.params.id))) {
-      return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
-    }
+    const result = await catalog.deleteBook(req.params.id);
 
-    ok(res, { deleted_book_id: Number(req.params.id) });
+    if (!result) return fail(res, 404, "ไม่พบหนังสือเล่มนี้");
+
+    ok(res, { deleted_book_id: Number(req.params.id), archived: result.archived });
   } catch (err) {
     handleDbError(res, err);
   }
@@ -192,7 +202,7 @@ app.get("/api/authors/:id/books", authenticate, async (req, res) => {
     const [books] = await pool.query(
       `SELECT book_id, title, isbn, published_year, price
        FROM books
-       WHERE author_id = ?
+       WHERE author_id = ? AND deleted_at IS NULL
        ORDER BY published_year`,
       [req.params.id],
     );
@@ -226,83 +236,8 @@ app.post("/api/categories", ...adminOnly, validateBody(categorySchema), async (r
   }
 });
 
-// ---------- Auth (สมัครสมาชิก / เข้าสู่ระบบ) ----------
-// hash สำหรับเทียบเมื่อไม่พบผู้ใช้ เพื่อให้เวลาตอบใกล้เคียงกรณีรหัสผ่านผิด
-const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 10);
-
-// สมัครสมาชิก: สร้างสมาชิกห้องสมุดและบัญชีผู้ใช้ (บทบาท user เสมอ) ในธุรกรรมเดียวกัน
-app.post("/api/auth/register", registerLimiter, validateBody(registerSchema), async (req, res) => {
-  const { username, password, name, email, phone } = req.body;
-  const passwordHash = await bcrypt.hash(password, 10);
-  let conn;
-
-  try {
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-
-    const [member] = await conn.query(
-      "INSERT INTO members (name, email, phone) VALUES (?, ?, ?)",
-      [name.trim(), email.trim(), phone ? phone.trim() : null],
-    );
-    const [user] = await conn.query(
-      "INSERT INTO users (username, password_hash, role, member_id) VALUES (?, ?, 'user', ?)",
-      [username, passwordHash, member.insertId],
-    );
-
-    await conn.commit();
-    ok(
-      res,
-      { user_id: user.insertId, username, role: "user", member_id: member.insertId },
-      201,
-    );
-  } catch (err) {
-    if (conn) await conn.rollback();
-    if (err.code === "ER_DUP_ENTRY") {
-      return fail(res, 409, "username หรืออีเมลนี้ถูกใช้งานแล้ว");
-    }
-    handleDbError(res, err);
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
-// เข้าสู่ระบบ: ตรวจรหัสผ่านแล้วออก JWT
-app.post("/api/auth/login", loginLimiter, validateBody(loginSchema), async (req, res) => {
-  const { username, password } = req.body;
-
-  try {
-    const [rows] = await pool.query(
-      `SELECT u.user_id, u.username, u.password_hash, u.role, u.member_id, m.name
-       FROM users u LEFT JOIN members m ON m.member_id = u.member_id
-       WHERE u.username = ?`,
-      [username],
-    );
-    const user = rows[0];
-    const match = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
-
-    if (!user || !match) {
-      return fail(res, 401, "username หรือ password ไม่ถูกต้อง");
-    }
-
-    ok(res, {
-      token: signToken(user),
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        role: user.role,
-        member_id: user.member_id,
-        name: user.name || user.username,
-      },
-    });
-  } catch (err) {
-    handleDbError(res, err);
-  }
-});
-
-// ข้อมูลผู้ใช้ที่ล็อกอินอยู่ (อ่านจาก token)
-app.get("/api/auth/me", authenticate, (req, res) => {
-  ok(res, req.user);
-});
+// ---------- Auth (สมัคร / เข้าสู่ระบบ / refresh / ออกจากระบบ / ลืมรหัสผ่าน) ดู src/auth-routes.js ----------
+app.use("/api/auth", authRoutes);
 
 // ---------- GraphQL (Lab 2): เรียกด้วย POST /graphql ต้องเข้าสู่ระบบ ----------
 app.post("/graphql", authenticate, graphqlHandler);
@@ -315,12 +250,19 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
-  require("./cache").connectCache().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Book API: http://localhost:${PORT}`);
-      console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+  require("./cache")
+    .connectCache()
+    .then(() => runSecurityCheck(pool))
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Book API: http://localhost:${PORT}`);
+        console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
+      });
+    })
+    .catch((err) => {
+      console.error(err.message);
+      process.exit(1);
     });
-  });
 }
 
 // Export Express app for testing with Supertest

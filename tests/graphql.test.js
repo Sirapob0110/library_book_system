@@ -364,8 +364,13 @@ describe("GraphQL", () => {
       expect(missing.body.errors[0].extensions.code).toBe("NOT_FOUND");
     });
 
-    test("deleteBook: สำเร็จ และลบซ้ำได้ success:false (ไม่ใช่ error)", async () => {
-      pool.query.mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([{ affectedRows: 0 }]);
+    test("deleteBook: สำเร็จ (ลบจริง) และลบซ้ำได้ success:false (ไม่ใช่ error)", async () => {
+      const conn = mockConnection();
+      conn.query
+        .mockResolvedValueOnce([[{ book_id: 5 }]])
+        .mockResolvedValueOnce([[{ total: 0, active: 0 }]])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([[]]); // ครั้งที่สอง: ไม่พบแล้ว
 
       const first = await gql(admin, 'mutation { deleteBook(id: "5") { success message } }');
       const second = await gql(admin, 'mutation { deleteBook(id: "5") { success message } }');
@@ -373,6 +378,22 @@ describe("GraphQL", () => {
       expect(first.body.data.deleteBook).toEqual({ success: true, message: "ลบหนังสือ ID 5 แล้ว" });
       expect(second.body.errors).toBeUndefined();
       expect(second.body.data.deleteBook).toEqual({ success: false, message: "ไม่พบหนังสือ ID 5" });
+    });
+
+    test("deleteBook: เคยมีประวัติยืม เก็บเป็นประวัติ และยังมีคนยืมค้างได้ error CONFLICT", async () => {
+      const conn = mockConnection();
+      conn.query
+        .mockResolvedValueOnce([[{ book_id: 5 }]])
+        .mockResolvedValueOnce([[{ total: 2, active: 0 }]])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([[{ book_id: 6 }]])
+        .mockResolvedValueOnce([[{ total: 2, active: 1 }]]);
+
+      const archived = await gql(admin, 'mutation { deleteBook(id: "5") { success message } }');
+      const blocked = await gql(admin, 'mutation { deleteBook(id: "6") { success } }');
+
+      expect(archived.body.data.deleteBook.message).toContain("เก็บเป็นประวัติ");
+      expect(blocked.body.errors[0].extensions.code).toBe("BOOK_HAS_ACTIVE_LOANS");
     });
 
     test("createAuthor และ createCategory", async () => {

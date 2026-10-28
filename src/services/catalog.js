@@ -2,6 +2,7 @@
 // ที่นี่มี SQL และการล้าง cache ที่เดียว ส่วน handler ทำหน้าที่แปลงคำขอ/คำตอบเท่านั้น
 const pool = require("../db");
 const cache = require("../cache");
+const { ServiceError } = require("./errors");
 const { parsePagination, parseSort, buildPagination } = require("../middlewares/query-parser");
 
 const BOOK_LIST_TTL = 60; // วินาที
@@ -24,7 +25,7 @@ async function getBookDetail(id) {
             a.author_id, a.name AS author_name, a.nationality
      FROM books b
      JOIN authors a ON b.author_id = a.author_id
-     WHERE b.book_id = ?`,
+     WHERE b.book_id = ? AND b.deleted_at IS NULL`,
     [id],
   );
 
@@ -46,7 +47,7 @@ async function getBookDetail(id) {
 async function queryBooks(query) {
   const { page, limit, offset } = parsePagination(query);
   const { column, order } = parseSort(query, BOOK_SORT, "id");
-  const where = [];
+  const where = ["b.deleted_at IS NULL"]; // หนังสือที่ถูกลบแบบเก็บประวัติไม่แสดง
   const params = [];
 
   if (typeof query.q === "string" && query.q.trim()) {
@@ -162,7 +163,7 @@ async function updateBook(id, data) {
     const [result] = await conn.query(
       `UPDATE books
        SET title = ?, isbn = ?, author_id = ?, published_year = ?, price = ?
-       WHERE book_id = ?`,
+       WHERE book_id = ? AND deleted_at IS NULL`,
       [title, isbn, author_id, published_year ?? null, price ?? 0, id],
     );
 
@@ -193,14 +194,54 @@ async function updateBook(id, data) {
   }
 }
 
-// ลบหนังสือ: คืน true ถ้าลบได้ false ถ้าไม่พบ
+// ลบหนังสือ: ถ้ามีเล่มที่ยังถูกยืมอยู่ปฏิเสธ (409) ถ้าเคยมีประวัติการยืมเก็บแถวไว้และตั้ง deleted_at
+// (ISBN ยังถูกจองไว้) ถ้าไม่เคยถูกยืมลบจริง คืน { archived } หรือ null ถ้าไม่พบ
 async function deleteBook(id) {
-  const [result] = await pool.query("DELETE FROM books WHERE book_id = ?", [id]);
+  let conn;
 
-  if (result.affectedRows === 0) return false;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
 
-  await cache.invalidate("books:");
-  return true;
+    const [books] = await conn.query(
+      "SELECT book_id FROM books WHERE book_id = ? AND deleted_at IS NULL FOR UPDATE",
+      [id],
+    );
+
+    if (books.length === 0) {
+      await conn.rollback();
+      return null;
+    }
+
+    const [counts] = await conn.query(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(return_date IS NULL), 0) AS active
+       FROM loans WHERE book_id = ?`,
+      [id],
+    );
+    const { total, active } = counts[0];
+
+    if (Number(active) > 0) {
+      await conn.rollback();
+      throw new ServiceError(409, "ไม่สามารถลบหนังสือที่ยังมีผู้ยืมค้างอยู่ได้ ต้องรอให้คืนครบก่อน", {
+        code: "BOOK_HAS_ACTIVE_LOANS",
+      });
+    }
+
+    if (Number(total) > 0) {
+      await conn.query("UPDATE books SET deleted_at = NOW() WHERE book_id = ?", [id]);
+    } else {
+      await conn.query("DELETE FROM books WHERE book_id = ?", [id]);
+    }
+
+    await conn.commit();
+    await cache.invalidate("books:");
+    return { archived: Number(total) > 0 };
+  } catch (err) {
+    if (conn && !(err instanceof ServiceError)) await conn.rollback();
+    throw err;
+  } finally {
+    if (conn) conn.release();
+  }
 }
 
 async function listAuthors() {

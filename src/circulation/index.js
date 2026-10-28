@@ -1,11 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const morgan = require("morgan");
+const { requestId, requestLogger } = require("../middlewares/request-log");
 const path = require("path");
 const YAML = require("yaml");
 const swaggerUi = require("swagger-ui-express");
-const db = require("../db");
+const service = require("../services/circulation");
 const { authenticate, requireRole, deny } = require("../auth");
 const cache = require("../cache");
 const { generalLimiter } = require("../middlewares/rate-limiter");
@@ -29,10 +29,12 @@ app.use(
   cors({
     origin: FRONTEND_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+    exposedHeaders: ["X-Request-Id"],
   }),
 );
-if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+app.use(requestId);
+app.use(requestLogger("circulation-service"));
 app.use(express.json({ limit: "10kb" })); // ข้อมูลเกิน 10KB ตอบ 413
 
 // ========================
@@ -77,19 +79,15 @@ function isValidDate(value) {
   );
 }
 
-function handleDatabaseError(res, error, message) {
-  if (error.code === "ER_DUP_ENTRY") {
-    return res.status(409).json({
-      error: "อีเมลนี้มีผู้ใช้งานแล้ว",
-    });
-  }
-
-  console.error(message, error);
-
-  return res.status(500).json({
-    error: "เกิดข้อผิดพลาดในการติดต่อฐานข้อมูล",
-  });
+// แปลงข้อผิดพลาดที่ชั้น service ตั้งใจโยน (ServiceError) เป็นคำตอบ HTTP
+function sendServiceError(res, error) {
+  if (error.kind === "deny") return deny(res, error.status, error.message);
+  return res
+    .status(error.status)
+    .json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
 }
+
+const invalidMemberId = (res) => res.status(400).json({ error: "รหัสสมาชิกไม่ถูกต้อง" });
 
 // ========================
 // GET /api/members
@@ -97,21 +95,10 @@ function handleDatabaseError(res, error, message) {
 // ========================
 app.get("/api/members", ...adminOnly, async (req, res) => {
   try {
-    const [members] = await db.query(
-      `SELECT member_id, name, email, phone
-       FROM members
-       ORDER BY member_id DESC`,
-    );
-
-    return res.status(200).json({
-      data: members,
-    });
+    return res.status(200).json({ data: await service.listMembers() });
   } catch (error) {
     console.error("Get members error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถดึงข้อมูลสมาชิกได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถดึงข้อมูลสมาชิกได้" });
   }
 });
 
@@ -123,28 +110,14 @@ app.post("/api/members", ...adminOnly, validateBody(memberSchema), async (req, r
   const member = { ...req.body, phone: req.body.phone || null };
 
   try {
-    const [result] = await db.query(
-      `INSERT INTO members (name, email, phone)
-       VALUES (?, ?, ?)`,
-      [member.name, member.email, member.phone],
-    );
-
-    return res.status(201).json({
-      message: "เพิ่มสมาชิกสำเร็จ",
-      member_id: result.insertId,
-    });
+    const memberId = await service.createMember(member);
+    return res.status(201).json({ message: "เพิ่มสมาชิกสำเร็จ", member_id: memberId });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({
-        error: "อีเมลนี้มีผู้ใช้งานแล้ว",
-      });
+      return res.status(409).json({ error: "อีเมลนี้มีผู้ใช้งานแล้ว" });
     }
-
     console.error("Create member error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถเพิ่มสมาชิกได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถเพิ่มสมาชิกได้" });
   }
 });
 
@@ -156,56 +129,18 @@ app.put("/api/members/:id", ...adminOnly, validateBody(memberSchema), async (req
   const memberId = Number(req.params.id);
   const member = { ...req.body, phone: req.body.phone || null };
 
-  if (!isPositiveInteger(memberId)) {
-    return res.status(400).json({
-      error: "รหัสสมาชิกไม่ถูกต้อง",
-    });
-  }
+  if (!isPositiveInteger(memberId)) return invalidMemberId(res);
 
   try {
-    const [existing] = await db.query(
-      `SELECT member_id
-       FROM members
-       WHERE member_id = ?`,
-      [memberId],
-    );
-
-    if (existing.length === 0) {
-      return res.status(404).json({
-        error: "ไม่พบสมาชิก",
-      });
-    }
-
-    await db.query(
-      `UPDATE members
-       SET name = ?, email = ?, phone = ?
-       WHERE member_id = ?`,
-      [member.name, member.email, member.phone, memberId],
-    );
-
-    const [rows] = await db.query(
-      `SELECT member_id, name, email, phone
-       FROM members
-       WHERE member_id = ?`,
-      [memberId],
-    );
-
-    return res.status(200).json({
-      message: "แก้ไขข้อมูลสมาชิกสำเร็จ",
-      data: rows[0],
-    });
+    const updated = await service.updateMember(memberId, member);
+    if (!updated) return res.status(404).json({ error: "ไม่พบสมาชิก" });
+    return res.status(200).json({ message: "แก้ไขข้อมูลสมาชิกสำเร็จ", data: updated });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({
-        error: "อีเมลนี้มีผู้ใช้งานแล้ว",
-      });
+      return res.status(409).json({ error: "อีเมลนี้มีผู้ใช้งานแล้ว" });
     }
-
     console.error("Update member error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถแก้ไขข้อมูลสมาชิกได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถแก้ไขข้อมูลสมาชิกได้" });
   }
 });
 
@@ -216,42 +151,25 @@ app.put("/api/members/:id", ...adminOnly, validateBody(memberSchema), async (req
 app.delete("/api/members/:id", ...adminOnly, async (req, res) => {
   const memberId = Number(req.params.id);
 
-  if (!isPositiveInteger(memberId)) {
-    return res.status(400).json({
-      error: "รหัสสมาชิกไม่ถูกต้อง",
-    });
-  }
+  if (!isPositiveInteger(memberId)) return invalidMemberId(res);
 
   try {
-    const [result] = await db.query("DELETE FROM members WHERE member_id = ?", [
-      memberId,
-    ]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        error: "ไม่พบสมาชิก",
-      });
-    }
-
+    const result = await service.deleteMember(memberId);
+    if (!result) return res.status(404).json({ error: "ไม่พบสมาชิก" });
     return res.status(200).json({
-      message: "ลบสมาชิกสำเร็จ",
+      message: result.archived
+        ? "ลบสมาชิกสำเร็จ (เก็บประวัติการยืมไว้ และปิดบัญชีผู้ใช้แล้ว)"
+        : "ลบสมาชิกสำเร็จ",
       member_id: memberId,
+      archived: result.archived,
     });
   } catch (error) {
-    if (
-      error.code === "ER_ROW_IS_REFERENCED_2" ||
-      error.code === "ER_ROW_IS_REFERENCED"
-    ) {
-      return res.status(409).json({
-        error: "ไม่สามารถลบสมาชิกที่มีประวัติการยืมได้",
-      });
+    if (error instanceof service.ServiceError) return sendServiceError(res, error);
+    if (error.code === "ER_ROW_IS_REFERENCED_2" || error.code === "ER_ROW_IS_REFERENCED") {
+      return res.status(409).json({ error: "ไม่สามารถลบสมาชิกที่มีประวัติการยืมได้" });
     }
-
     console.error("Delete member error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถลบสมาชิกได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถลบสมาชิกได้" });
   }
 });
 
@@ -262,11 +180,7 @@ app.delete("/api/members/:id", ...adminOnly, async (req, res) => {
 app.get("/api/members/:id/loans", authenticate, async (req, res) => {
   const memberId = Number(req.params.id);
 
-  if (!isPositiveInteger(memberId)) {
-    return res.status(400).json({
-      error: "รหัสสมาชิกไม่ถูกต้อง",
-    });
-  }
+  if (!isPositiveInteger(memberId)) return invalidMemberId(res);
 
   // ผู้ใช้ทั่วไปดูได้เฉพาะประวัติของตัวเอง ส่วน admin ดูได้ทุกคน
   if (req.user.role !== "admin" && req.user.member_id !== memberId) {
@@ -274,44 +188,12 @@ app.get("/api/members/:id/loans", authenticate, async (req, res) => {
   }
 
   try {
-    const [members] = await db.query(
-      `SELECT member_id, name
-       FROM members
-       WHERE member_id = ?`,
-      [memberId],
-    );
-
-    if (members.length === 0) {
-      return res.status(404).json({
-        error: "ไม่พบสมาชิก",
-      });
-    }
-
-    const [loans] = await db.query(
-      `SELECT
-         l.loan_id,
-         l.book_id,
-         b.title,
-         l.loan_date,
-         l.due_date,
-         l.return_date
-       FROM loans l
-       JOIN books b ON b.book_id = l.book_id
-       WHERE l.member_id = ?
-       ORDER BY l.loan_id DESC`,
-      [memberId],
-    );
-
-    return res.status(200).json({
-      member: members[0],
-      data: loans,
-    });
+    const result = await service.getMemberLoans(memberId);
+    if (!result) return res.status(404).json({ error: "ไม่พบสมาชิก" });
+    return res.status(200).json({ member: result.member, data: result.loans });
   } catch (error) {
     console.error("Get member loans error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถดึงประวัติการยืมได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถดึงประวัติการยืมได้" });
   }
 });
 
@@ -321,32 +203,10 @@ app.get("/api/members/:id/loans", authenticate, async (req, res) => {
 // ========================
 app.get("/api/loans/overdue", ...adminOnly, async (req, res) => {
   try {
-    const [loans] = await db.query(
-      `SELECT
-         l.loan_id,
-         l.member_id,
-         m.name AS member_name,
-         l.book_id,
-         b.title,
-         l.loan_date,
-         l.due_date
-       FROM loans l
-       JOIN members m ON m.member_id = l.member_id
-       JOIN books b ON b.book_id = l.book_id
-       WHERE l.due_date < CURDATE()
-         AND l.return_date IS NULL
-       ORDER BY l.due_date ASC`,
-    );
-
-    return res.status(200).json({
-      data: loans,
-    });
+    return res.status(200).json({ data: await service.listOverdueLoans() });
   } catch (error) {
     console.error("Get overdue loans error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถดึงรายการยืมเกินกำหนดได้",
-    });
+    return res.status(500).json({ error: "ไม่สามารถดึงรายการยืมเกินกำหนดได้" });
   }
 });
 
@@ -380,97 +240,24 @@ app.post("/api/loans", authenticate, validateBody(loanSchema), async (req, res) 
   }
 
   if (!isValidDate(loanDate) || !isValidDate(due_date) || due_date < loanDate) {
-    return res.status(400).json({
-      error: "วันที่ยืมและวันกำหนดคืนไม่ถูกต้อง",
-    });
+    return res.status(400).json({ error: "วันที่ยืมและวันกำหนดคืนไม่ถูกต้อง" });
   }
 
-  let connection;
-
   try {
-    connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    const [members] = await connection.query(
-      "SELECT member_id FROM members WHERE member_id = ?",
-      [memberId],
-    );
-
-    if (members.length === 0) {
-      await connection.rollback();
-
-      return res.status(404).json({
-        error: "ไม่พบสมาชิก",
-      });
-    }
-
-    const [books] = await connection.query(
-      `SELECT book_id, total_copies, available_copies
-       FROM books
-       WHERE book_id = ?
-       FOR UPDATE`,
-      [bookId],
-    );
-
-    if (books.length === 0) {
-      await connection.rollback();
-
-      return res.status(404).json({
-        error: "ไม่พบหนังสือ",
-      });
-    }
-
-    if (Number(books[0].available_copies) <= 0) {
-      await connection.rollback();
-
-      return res.status(409).json({
-        error: "หนังสือหมด ไม่มีเล่มให้ยืม",
-      });
-    }
-
-    const [result] = await connection.query(
-      `INSERT INTO loans (book_id, member_id, loan_date, due_date)
-       VALUES (?, ?, ?, ?)`,
-      [bookId, memberId, loanDate, due_date],
-    );
-
-    await connection.query(
-      `UPDATE books
-       SET available_copies = available_copies - 1
-       WHERE book_id = ?`,
-      [bookId],
-    );
-
-    await connection.commit();
-    // จำนวนคงเหลือเปลี่ยนแล้ว ล้าง cache รายการหนังสือของ Book API (ใช้ได้เมื่อสองบริการใช้ Redis ร่วมกัน)
-    await cache.invalidate("books:");
+    const loanId = await service.createLoan({ bookId, memberId, loanDate, dueDate: due_date });
 
     return res.status(201).json({
       message: "ยืมหนังสือสำเร็จ",
-      loan_id: result.insertId,
+      loan_id: loanId,
       book_id: bookId,
       member_id: memberId,
       loan_date: loanDate,
       due_date,
     });
   } catch (error) {
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error("Loan rollback error:", rollbackError);
-      }
-    }
-
+    if (error instanceof service.ServiceError) return sendServiceError(res, error);
     console.error("Create loan error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถทำรายการยืมหนังสือได้",
-    });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
+    return res.status(500).json({ error: "ไม่สามารถทำรายการยืมหนังสือได้" });
   }
 });
 
@@ -482,88 +269,16 @@ app.put("/api/loans/:id/return", authenticate, async (req, res) => {
   const loanId = Number(req.params.id);
 
   if (!isPositiveInteger(loanId)) {
-    return res.status(400).json({
-      error: "รหัสรายการยืมไม่ถูกต้อง",
-    });
+    return res.status(400).json({ error: "รหัสรายการยืมไม่ถูกต้อง" });
   }
 
-  let connection;
-
   try {
-    connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    const [loans] = await connection.query(
-      `SELECT loan_id, book_id, member_id, return_date
-       FROM loans
-       WHERE loan_id = ?
-       FOR UPDATE`,
-      [loanId],
-    );
-
-    if (loans.length === 0) {
-      await connection.rollback();
-
-      return res.status(404).json({
-        error: "ไม่พบรายการยืม",
-      });
-    }
-
-    // ผู้ใช้ทั่วไปคืนได้เฉพาะรายการยืมของตัวเอง
-    if (req.user.role !== "admin" && loans[0].member_id !== req.user.member_id) {
-      await connection.rollback();
-
-      return deny(res, 403, "คืนได้เฉพาะรายการยืมของตัวเอง");
-    }
-
-    if (loans[0].return_date) {
-      await connection.rollback();
-
-      return res.status(409).json({
-        error: "หนังสือรายการนี้ถูกคืนแล้ว",
-      });
-    }
-
-    await connection.query(
-      `UPDATE loans
-       SET return_date = CURDATE()
-       WHERE loan_id = ?`,
-      [loanId],
-    );
-
-    await connection.query(
-      `UPDATE books
-       SET available_copies =
-         LEAST(total_copies, available_copies + 1)
-       WHERE book_id = ?`,
-      [loans[0].book_id],
-    );
-
-    await connection.commit();
-    await cache.invalidate("books:");
-
-    return res.status(200).json({
-      message: "คืนหนังสือสำเร็จ",
-      loan_id: loanId,
-    });
+    const fine = await service.returnLoan(loanId, req.user);
+    return res.status(200).json({ message: "คืนหนังสือสำเร็จ", loan_id: loanId, ...fine });
   } catch (error) {
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error("Return rollback error:", rollbackError);
-      }
-    }
-
+    if (error instanceof service.ServiceError) return sendServiceError(res, error);
     console.error("Return loan error:", error);
-
-    return res.status(500).json({
-      error: "ไม่สามารถคืนหนังสือได้",
-    });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
+    return res.status(500).json({ error: "ไม่สามารถคืนหนังสือได้" });
   }
 });
 

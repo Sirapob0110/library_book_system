@@ -83,6 +83,22 @@ mysql -u root --default-character-set=utf8mb4 < seed.sql
 
 > **คำเตือน:** `schema.sql` ลบฐานข้อมูล `book_system` เดิมทิ้งแล้วสร้างใหม่ ข้อมูลที่มีอยู่จะหายหมด
 
+**ฐานข้อมูลเดิมที่ใช้งานอยู่แล้ว (ไม่อยากลบข้อมูล):** รัน migration แทนการโหลด `schema.sql` ใหม่ ตามลำดับ
+
+```bash
+mysql -u root book_system < migrations/001-soft-delete.sql   # คอลัมน์ deleted_at (หนังสือ/สมาชิก)
+mysql -u root book_system < migrations/002-auth-tokens.sql   # ตาราง refresh_tokens, password_resets
+```
+
+**ตั้งรหัสผ่าน admin เอง (แนะนำทันทีหลังโหลด `seed.sql`):** `seed.sql` สร้าง admin รหัสตัวอย่าง `Admin@1234` ให้ลองระบบได้ แต่ควรเปลี่ยนก่อนเปิดใช้งานจริง
+
+```bash
+npm run set-password -- admin                      # ถามรหัสผ่านใหม่ (ไม่แสดงบนจอ)
+NEW_PASSWORD='รหัสใหม่ที่ยาวพอ' npm run set-password -- admin   # หรือส่งทางตัวแปร (ใช้ในสคริปต์)
+```
+
+รหัสผ่านต้องผ่านกฎเดียวกับตอนสมัคร (อย่างน้อย 8 ตัว) คำสั่งนี้เพิกถอนเซสชันเดิมของบัญชีนั้นด้วย
+
 ข้อมูลตัวอย่างประกอบด้วยหนังสือ 6 เล่ม ผู้แต่ง 4 คน หมวดหมู่ 4 หมวด สมาชิก 2 คน และบัญชีผู้ใช้ 3 บัญชี (ดูหัวข้อ "บัญชีสำหรับทดลองใช้")
 
 ### 4. เริ่มระบบ
@@ -99,6 +115,20 @@ cd frontend && npm run dev     # Frontend        http://localhost:5173
 **Redis (ไม่บังคับ):** ถ้ามี Redis ให้ตั้ง `REDIS_URL=redis://localhost:6379` ใน `.env` cache ของรายการหนังสือจะทำงานและใช้ร่วมกันทุกบริการ (ล้างอัตโนมัติเมื่อมีการยืม/คืน/แก้ข้อมูล) ถ้าไม่ตั้งหรือ Redis ล่ม ระบบยังทำงานได้ปกติโดยไม่ใช้ cache ที่ใช้ร่วมกัน
 
 เปิดเว็บที่ http://localhost:5173 แล้วเข้าสู่ระบบ
+
+### รันด้วย Docker (ทางเลือก ไม่ต้องติดตั้ง XAMPP)
+
+```bash
+docker compose up --build
+```
+
+เริ่ม MySQL (สร้างฐานข้อมูลจาก `schema.sql` + `seed.sql` ครั้งแรก), Redis, Book API, Circulation และ Gateway พร้อมกัน เข้าที่ http://localhost:8000 แล้วรันหน้าเว็บบนเครื่องด้วย `cd frontend && npm run dev` ตั้งรหัสผ่านฐานข้อมูลและ `JWT_SECRET` เองได้ด้วยตัวแปร `DB_PASSWORD` และ `JWT_SECRET` ก่อนรัน (ค่าเริ่มต้นใช้สำหรับพัฒนาเท่านั้น) ถ้าต้องการสร้างฐานข้อมูลใหม่ให้ `docker compose down -v` ก่อน
+
+compose ตั้ง `NODE_ENV=development` เพื่อให้ใช้ค่าเริ่มต้นสำหรับพัฒนาได้ (image ตั้ง `production` ไว้ ซึ่งตัวตรวจความปลอดภัยจะไม่ยอมเริ่มระบบถ้า `JWT_SECRET` เป็นค่าตัวอย่างหรือ admin ยังใช้รหัส `Admin@1234`) ถ้าจะใช้จริงให้ตั้ง `NODE_ENV=production`, `JWT_SECRET` สุ่ม และเปลี่ยนรหัส admin ด้วย `npm run set-password`
+
+> หมายเหตุ: ไฟล์ Docker เขียนและตรวจรูปแบบแล้ว แต่ผู้จัดทำยังไม่ได้ทดสอบรันจริงบนเครื่องที่มี Docker (ใน CI ก็เช่นกัน: เขียนไว้แต่ยังไม่เคยรันบน GitHub Actions)
+
+**CI:** `.github/workflows/ci.yml` รัน `npm test`, ตรวจว่า `openapi.yaml` เหมือนสำเนาใน `src/circulation/`, และ lint + เทสต์ (`vitest`) + build ของ frontend ทุกครั้งที่ push
 
 ## บัญชีสำหรับทดลองใช้ และสิทธิ์ของแต่ละบทบาท
 
@@ -120,7 +150,32 @@ cd frontend && npm run dev     # Frontend        http://localhost:5173
 
 ฝั่งหน้าเว็บ admin จะเห็นแท็บ "จัดการหนังสือ" (เพิ่ม/แก้ไข/ลบหนังสือ เพิ่มผู้แต่งและหมวดหมู่), แท็บ "สมาชิก" และปุ่มตรวจรายการยืมเกินกำหนดในหน้าประวัติ ส่วน user จะไม่เห็นแท็บเหล่านี้และไม่มีตัวเลือกสมาชิกในฟอร์มยืม แต่สิทธิ์ถูกบังคับที่ฝั่ง API เสมอ (ไม่เชื่อหน้าเว็บ) รายละเอียดและผลทดสอบดู `auth-test-results.md`
 
-เรียก API ด้วย `curl` หรือ Postman: เรียก `POST /api/auth/login` เพื่อรับ token แล้วแนบ header `Authorization: Bearer <token>` (token หมดอายุใน 2 ชั่วโมง)
+เรียก API ด้วย `curl` หรือ Postman: เรียก `POST /api/auth/login` เพื่อรับ token แล้วแนบ header `Authorization: Bearer <token>` (access token หมดอายุใน 15 นาที ต่ออายุด้วย `POST /api/auth/refresh` ซึ่งใช้ cookie `refresh_token` ที่เซิร์ฟเวอร์ตั้งให้ตอนล็อกอิน — ดูหัวข้อ "เซสชันและการลืมรหัสผ่าน")
+
+## เซสชันและการลืมรหัสผ่าน
+
+| เรื่อง | การทำงาน |
+|---|---|
+| Access token | JWT อายุ 15 นาที หน้าเว็บเก็บไว้ในตัวแปรหน่วยความจำเท่านั้น (ไม่ใช้ `sessionStorage`/`localStorage`) |
+| Refresh token | ข้อความสุ่ม 256 บิต ส่งเป็น cookie `httpOnly`, `SameSite=Lax`, path `/api/auth`, อายุ 7 วัน (`Secure` เมื่อ `NODE_ENV=production` หรือ `COOKIE_SECURE=true`) ฐานข้อมูลเก็บเฉพาะค่า sha256 |
+| หมุนเวียน | ใช้ refresh ครั้งหนึ่งได้ token ใหม่ ตัวเก่าใช้ไม่ได้อีก ถ้ามีการนำตัวเก่ามาใช้ซ้ำ (สัญญาณว่าถูกขโมย) ระบบเพิกถอนทั้งชุดเซสชัน ยกเว้นซ้ำภายใน 10 วินาที (หลายแท็บ) จะตอบ 409 `REFRESH_CONFLICT` ให้ลองใหม่ |
+| ออกจากระบบ | `POST /api/auth/logout` เพิกถอนทั้งชุดและล้าง cookie |
+| ป้องกัน CSRF | refresh/logout ตรวจ header `Origin` ต้องตรงกับ `FRONTEND_ORIGIN` และ cookie เป็น `SameSite=Lax` |
+| ลืมรหัสผ่าน | `POST /api/auth/forgot-password` ตอบ 202 ข้อความเดียวกันเสมอ ลิงก์ใช้ได้ครั้งเดียว อายุ 30 นาที ตั้งรหัสใหม่ที่ `POST /api/auth/reset-password` แล้วทุกเซสชันของผู้ใช้ถูกเพิกถอน |
+
+**ข้อจำกัดที่ควรรู้:** (1) โปรเจกต์นี้**ยังไม่ได้เชื่อมระบบอีเมล** ลิงก์รีเซ็ตรหัสผ่านจะถูกพิมพ์ใน log ของ Book API เป็น JSON (`"event":"password_reset_link"`) ผู้ดูแลเอาลิงก์ไปให้ผู้ใช้เอง ถ้าจะใช้จริงให้แก้ `src/services/mailer.js` (2) หลังเพิกถอนเซสชัน access token ที่ออกไปแล้วยังใช้ได้จนครบ 15 นาที (3) อีเมลของสมาชิกที่ถูกเก็บเข้าคลัง (soft delete) ยังถูกจองไว้ สมัครซ้ำด้วยอีเมลเดิมไม่ได้
+
+**ตรวจความปลอดภัยตอนเริ่มระบบ:** ถ้า `NODE_ENV=production` แล้ว `JWT_SECRET` สั้น/เป็นค่าตัวอย่าง หรือ admin ยังใช้รหัส `Admin@1234` Book API จะไม่ยอมเริ่ม (ข้ามได้ด้วย `ALLOW_INSECURE_DEFAULTS=true` โดยรับความเสี่ยงเอง) โหมดอื่นแสดงเป็นคำเตือน
+
+## กติกาการยืม ค่าปรับ และการลบข้อมูล
+
+- ยืมค้างได้สูงสุด 5 เล่มต่อสมาชิก (`MAX_ACTIVE_LOANS`) เกินตอบ 409 `LOAN_LIMIT_REACHED` การตรวจล็อกแถวสมาชิกไว้ จึงไม่เกินโควตาแม้ยืมพร้อมกัน ทดสอบด้วย `npm run test:concurrency` (ต้องเปิดบริการและมี token; เสร็จแล้วอาจโดน rate limit 100 คำขอ/นาทีชั่วคราว)
+- คืนช้าคิดค่าปรับวันละ 5 บาท (`FINE_PER_DAY`) แสดงที่ `days_overdue` และ `fine_amount` ในประวัติ รายการเกินกำหนด และตอนคืน (ยังไม่มีระบบชำระเงิน เป็นการคำนวณแสดงผลเท่านั้น)
+- ลบหนังสือ/สมาชิก: ไม่เคยมีประวัติการยืมลบจริง, มีประวัติจะเก็บเข้าคลัง (`deleted_at`, ตอบ `archived: true`, ประวัติยังอยู่; สมาชิกที่เก็บเข้าคลังจะเข้าสู่ระบบไม่ได้), ยังมีรายการยืมค้างลบไม่ได้ (409)
+
+## Request ID และ log
+
+Gateway สร้าง `X-Request-Id` ให้ทุกคำขอ (ใช้ค่าที่ลูกค้าส่งมาได้ถ้ารูปแบบปลอดภัย) ส่งต่อให้ทั้งสองบริการ และคืนใน response log ของทุกบริการเป็น JSON บรรทัดละรายการ มีฟิลด์ `time`, `level`, `service`, `requestId`, `method`, `path`, `status`, `durationMs`, `userId` (ไม่บันทึก query string, header หรือ body) ใช้ค้นตามรอยคำขอเดียวข้ามบริการได้
 
 ## เอกสาร API
 
@@ -161,7 +216,9 @@ curl -s localhost:3000/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Typ
 npm test
 ```
 
-รัน Jest พร้อมรายงาน coverage (305 tests, 11 ชุดทดสอบ) ใช้ฐานข้อมูลจำลอง ไม่ต้องเปิด MySQL และไม่อ่านไฟล์ `.env` ผลจึงเท่ากันทุกเครื่อง สรุปผลดู `coverage-report.md`
+รัน Jest พร้อมรายงาน coverage (382 tests, 14 ชุดทดสอบ) ใช้ฐานข้อมูลจำลอง ไม่ต้องเปิด MySQL และไม่อ่านไฟล์ `.env` ผลจึงเท่ากันทุกเครื่อง สรุปผลดู `coverage-report.md`
+
+ทดสอบหน้าเว็บ (Vitest + Testing Library, 20 tests): `cd frontend && npm test`
 
 ## ตัวแปรสภาพแวดล้อม (`.env`)
 
@@ -174,7 +231,15 @@ npm test
 | `CIRCULATION_PORT` | `3001` | พอร์ตของ Circulation Service |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | ที่อยู่ของหน้าเว็บ ใช้กำหนด CORS ของทั้งสองบริการ |
 | `JWT_SECRET` | ค่าสำหรับพัฒนา (มีคำเตือน) | ความลับสำหรับเซ็นและตรวจ JWT ต้องตั้งเป็นข้อความสุ่มของตัวเอง |
-| `JWT_EXPIRES_IN` | `2h` | อายุของ token |
+| `JWT_EXPIRES_IN` | `15m` | อายุของ access token |
+| `REFRESH_TOKEN_DAYS` | `7` | อายุของ refresh token (วัน) |
+| `REFRESH_GRACE_SECONDS` | `10` | ช่วงที่ใช้ refresh token ซ้ำแล้วตอบ 409 แทนการเพิกถอนทั้งชุด |
+| `RESET_TOKEN_MINUTES` | `30` | อายุของลิงก์ตั้งรหัสผ่านใหม่ |
+| `RESET_DELIVERY` | (ว่าง) | `console` = พิมพ์ลิงก์รีเซ็ตลง log แม้ใน production (ยังไม่มีช่องทางอีเมล) |
+| `COOKIE_SECURE` | (ว่าง) | `true` = ใส่ `Secure` ให้ cookie (เปิดอัตโนมัติเมื่อ `NODE_ENV=production`) |
+| `ALLOW_INSECURE_DEFAULTS` | (ว่าง) | `true` = ข้ามการบล็อกของตัวตรวจความปลอดภัยใน production |
+| `MAX_ACTIVE_LOANS`, `FINE_PER_DAY` | `5`, `5` | จำนวนเล่มที่ยืมค้างได้ และค่าปรับต่อวัน (บาท) |
+| `RESET_RATE_LIMIT_MAX` | `5` | โควตาลืม/ตั้งรหัสผ่านใหม่ ต่อ 15 นาที ต่อ IP |
 | `GATEWAY_PORT` | `8000` | พอร์ตของ API Gateway |
 | `BOOK_SERVICE_URL`, `CIRCULATION_SERVICE_URL` | `http://localhost:3000`, `http://localhost:3001` | ปลายทางที่ Gateway ส่งต่อ |
 | `GATEWAY_TIMEOUT_MS` | `3000` | เวลารอบริการปลายทางก่อนตอบ 503 |
@@ -215,12 +280,20 @@ npm test
 │   ├── middlewares/             rate limit, error handler, pagination
 │   ├── schemas/                 สคีมา zod ตรวจข้อมูลเข้า
 │   ├── services/catalog.js      ชั้นข้อมูลหนังสือ (ใช้ร่วม REST และ GraphQL)
+│   ├── services/circulation.js  กติกายืม-คืน ค่าปรับ soft delete (ชั้น service ของ Circulation)
+│   ├── services/tokens.js       refresh token / reset token
 │   ├── auth.js                  JWT: ออก token, ตรวจ token, ตรวจบทบาท
+│   ├── auth-routes.js           register/login/refresh/logout/forgot/reset/me
+│   ├── security-check.js        ตรวจค่าที่ไม่ปลอดภัยตอนเริ่มระบบ
 │   ├── db.js                    connection pool
 │   ├── circulation/             Circulation Service (+ circulation.test.js, openapi.yaml)
 │   └── services/external-api.js เรียก Open Library
 ├── tests/                       ชุดทดสอบ Book API, auth, external-api (+ helpers/, setup.js)
-├── frontend/                    React + Vite (App.jsx, Login.jsx, AdminCatalog.jsx)
+├── migrations/                  SQL ปรับฐานข้อมูลเดิม (001 soft delete, 002 ตาราง token)
+├── scripts/                     set-password.js, concurrency-test.js
+├── frontend/                    React + Vite (App, Login, Dashboard, components/*Tab, api.js, test/)
+├── Dockerfile, docker-compose.yml  รันทั้งระบบด้วย Docker
+├── .github/workflows/ci.yml     CI (ทดสอบ, lint, build)
 ├── schema.sql, seed.sql         ฐานข้อมูลและข้อมูลตัวอย่าง
 ├── openapi.yaml                 เอกสาร API
 ├── postman_collection.json      ชุด request ตัวอย่าง

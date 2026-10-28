@@ -37,4 +37,22 @@ const loginSchema = z.object({
     .min(1, "กรุณาระบุ username และ password"),
 });
 
-module.exports = { registerSchema, loginSchema };
+const passwordRule = registerSchema.shape.password;
+
+const forgotPasswordSchema = z.object({
+  identifier: z
+    .string({ required_error: "กรุณาระบุ username หรืออีเมล" })
+    .trim()
+    .min(1, "กรุณาระบุ username หรืออีเมล")
+    .max(150, "ข้อมูลยาวเกินไป"),
+});
+
+const resetPasswordSchema = z.object({
+  token: z
+    .string({ required_error: "กรุณาระบุ token" })
+    .min(20, "token ไม่ถูกต้อง")
+    .max(200, "token ไม่ถูกต้อง"),
+  password: passwordRule,
+});
+
+module.exports = { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, passwordRule };

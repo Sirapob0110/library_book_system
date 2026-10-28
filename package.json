@@ -8,7 +8,9 @@
     "start:circulation": "node src/circulation/index.js",
     "start:gateway": "node src/gateway/index.js",
     "start:all": "node scripts/start-all.js",
-    "test": "jest --coverage --runInBand"
+    "test": "jest --coverage --runInBand",
+    "set-password": "node scripts/set-password.js",
+    "test:concurrency": "node scripts/concurrency-test.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
@@ -42,6 +44,13 @@
     ],
     "setupFilesAfterEnv": [
       "<rootDir>/tests/setup-after-env.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/frontend/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/frontend/"
     ]
   }
 }

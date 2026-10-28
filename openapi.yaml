@@ -2,14 +2,27 @@ openapi: 3.0.3
 
 info:
   title: Library Book System API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     OpenAPI Specification สำหรับระบบ Library Book System
     ครอบคลุม Book API และ Circulation Service
 
-    **การยืนยันตัวตน:** เรียก `POST /api/auth/login` เพื่อรับ JWT แล้วแนบ header
+    **การยืนยันตัวตน:** เรียก `POST /api/auth/login` เพื่อรับ access token (JWT อายุ 15 นาที) แล้วแนบ header
     `Authorization: Bearer <token>` ในทุกคำขอ (ใน Swagger UI กดปุ่ม Authorize แล้ววาง token)
     ทั้งสองบริการใช้ token เดียวกัน
+
+    **เซสชันต่อเนื่อง:** การล็อกอินจะตั้ง cookie `refresh_token` (httpOnly, SameSite=Lax, path `/api/auth`, อายุ 7 วัน)
+    เมื่อ access token หมดอายุให้เรียก `POST /api/auth/refresh` (ใช้ cookie) เพื่อรับ token ใหม่
+    refresh token ใช้ได้ครั้งเดียว (หมุนเวียนทุกครั้ง); ถ้านำ token เก่ามาใช้ซ้ำ ระบบเพิกถอนทั้งชุดเซสชันนั้น
+    (ซ้ำภายใน 10 วินาทีตอบ 409 `REFRESH_CONFLICT` เผื่อหลายแท็บ refresh พร้อมกัน)
+    `POST /api/auth/logout` เพิกถอนเซสชัน; เปลี่ยนรหัสผ่านผ่าน reset จะเพิกถอนทุกเซสชันของผู้ใช้
+    คำขอ refresh/logout ที่มี header `Origin` ต้องเป็น origin ของหน้าเว็บ (`FRONTEND_ORIGIN`) ไม่เช่นนั้นตอบ 403 `UNTRUSTED_ORIGIN`
+    หมายเหตุ: access token ที่ออกไปแล้วยังใช้ได้จนครบ 15 นาทีแม้เพิกถอนเซสชันแล้ว
+
+    **ลืมรหัสผ่าน:** `POST /api/auth/forgot-password` ตอบ 202 เหมือนกันทุกกรณี (ไม่บอกว่ามีบัญชีหรือไม่)
+    ลิงก์ตั้งรหัสใหม่ใช้ได้ครั้งเดียว อายุ 30 นาที — โปรเจกต์นี้ยังไม่ได้เชื่อมระบบอีเมล ลิงก์จะถูกพิมพ์ใน log ของเซิร์ฟเวอร์เท่านั้น
+
+    **ติดตามคำขอ:** ทุกคำตอบมี header `X-Request-Id` (Gateway สร้างและส่งต่อให้บริการปลายทาง; ส่งค่ามาเองได้) และ log เป็น JSON
 
     **บทบาท:**
     - `admin` ทำได้ทุกอย่าง
@@ -22,7 +35,14 @@ info:
     **ข้อมูลที่ส่งเข้ามา:** ตรวจด้วย zod ถ้าไม่ผ่านตอบ 400 พร้อม `code: "VALIDATION_ERROR"` และ `details` ราย field
     ขนาด body สูงสุด 10KB (เกินตอบ 413) ข้อผิดพลาดทุกกรณีมีฟิลด์ `message` และ `error`
 
-    **จำกัดจำนวนคำขอ:** ทั้งระบบ 100 คำขอ/นาที/IP, login ผิดได้ 5 ครั้ง/15 นาที/IP, สมัครสมาชิก 10 ครั้ง/15 นาที/IP
+    **กติกาการยืม:** ยืมค้างได้สูงสุด 5 เล่มต่อสมาชิก (`MAX_ACTIVE_LOANS`, เกินตอบ 409 `LOAN_LIMIT_REACHED`);
+    คืนช้าคิดค่าปรับวันละ 5 บาท (`FINE_PER_DAY`) — ดูได้จาก `days_overdue` / `fine_amount`
+
+    **การลบ:** หนังสือ/สมาชิกที่ไม่เคยมีประวัติการยืมถูกลบจริง, ที่มีประวัติจะถูกเก็บเข้าคลัง (soft delete, ตอบ `archived: true`),
+    ที่ยังมีรายการยืมค้างอยู่ลบไม่ได้ (409 `BOOK_HAS_ACTIVE_LOANS` / `MEMBER_HAS_ACTIVE_LOANS`)
+
+    **จำกัดจำนวนคำขอ:** ทั้งระบบ 100 คำขอ/นาที/IP, login ผิดได้ 5 ครั้ง/15 นาที/IP, สมัครสมาชิก 10 ครั้ง/15 นาที/IP,
+    ลืม/ตั้งรหัสผ่านใหม่ 5 ครั้ง/15 นาที/IP
     เกินโควตาตอบ 429 พร้อม header `RateLimit` และ `RateLimit-Policy`
 
     **รายการหนังสือ:** `GET /api/books` รองรับค้นหา กรอง เรียง และแบ่งหน้า (ค่าที่ไม่ถูกต้องใช้ค่าเริ่มต้น ไม่ error)
@@ -39,7 +59,7 @@ security:
 
 tags:
   - name: Auth
-    description: สมัครสมาชิกและเข้าสู่ระบบ (JWT)
+    description: สมัครสมาชิก เข้าสู่ระบบ ต่ออายุเซสชัน ออกจากระบบ และลืมรหัสผ่าน (JWT + refresh cookie)
   - name: Books
     description: จัดการหนังสือ
   - name: Authors
@@ -62,7 +82,7 @@ paths:
       summary: สมัครสมาชิก (ได้บทบาท user เสมอ)
       description: |
         สร้างสมาชิกห้องสมุดและบัญชีผู้ใช้พร้อมกันในธุรกรรมเดียว
-        ไม่รับค่า role จากผู้สมัคร (บัญชี admin สร้างจาก seed.sql เท่านั้น)
+        ไม่รับค่า role จากผู้สมัคร (บัญชี admin สร้างจาก seed.sql เท่านั้น แล้วตั้งรหัสผ่านด้วย `npm run set-password`)
       operationId: post_api_auth_register
       security: []
       requestBody:
@@ -108,6 +128,11 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '200':
           description: เข้าสู่ระบบสำเร็จ
+          headers:
+            Set-Cookie:
+              description: "`refresh_token=...; HttpOnly; SameSite=Lax; Path=/api/auth` (หมุนเวียนทุกครั้ง)"
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -116,6 +141,122 @@ paths:
           $ref: '#/components/responses/BookError'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: ต่ออายุเซสชัน (ใช้ cookie refresh_token) รับ access token ใหม่
+      operationId: post_api_auth_refresh
+      security: []
+      description: |
+        ส่ง cookie `refresh_token` มากับคำขอ (เบราว์เซอร์: `credentials: "include"`). ได้ access token ใหม่และ cookie ใหม่ (token เดิมถูกใช้แล้ว)
+        - 401 `INVALID_REFRESH_TOKEN`: ไม่มี/หมดอายุ/ถูกเพิกถอน หรือเป็น token เก่าที่ถูกนำมาใช้ซ้ำ (ทั้งชุดเซสชันถูกเพิกถอน)
+        - 409 `REFRESH_CONFLICT`: token เพิ่งถูกใช้ไปไม่กี่วินาที (หลายแท็บ) ให้ลองใหม่ด้วย cookie ล่าสุด
+        - 403 `UNTRUSTED_ORIGIN`: header Origin ไม่ใช่หน้าเว็บของระบบ
+      responses:
+        '200':
+          description: ต่ออายุสำเร็จ
+          headers:
+            Set-Cookie:
+              description: "`refresh_token=...; HttpOnly; SameSite=Lax; Path=/api/auth` (หมุนเวียนทุกครั้ง)"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/BookError'
+        '409':
+          $ref: '#/components/responses/BookError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: ออกจากระบบ (เพิกถอนเซสชัน)
+      operationId: post_api_auth_logout
+      security: []
+      description: |
+        เพิกถอนทั้งชุดของ refresh token ใน cookie และสั่งล้าง cookie เรียกซ้ำได้ ไม่ error เมื่อไม่มี cookie
+      responses:
+        '200':
+          description: ออกจากระบบแล้ว
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          $ref: '#/components/responses/BookError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: ขอลิงก์ตั้งรหัสผ่านใหม่
+      operationId: post_api_auth_forgot_password
+      security: []
+      description: |
+        ตอบ 202 ข้อความเดิมเสมอไม่ว่าจะพบบัญชีหรือไม่ (กันการไล่เดา) ไม่ส่ง token กลับใน response — ลิงก์ถูกพิมพ์ใน log ของเซิร์ฟเวอร์ (ยังไม่ได้เชื่อมอีเมล)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordInput'
+      responses:
+        '202':
+          description: รับคำขอแล้ว (ข้อความเดียวกันทุกกรณี)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/BookInternalServerError'
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: ตั้งรหัสผ่านใหม่ด้วย token จากลิงก์
+      operationId: post_api_auth_reset_password
+      security: []
+      description: |
+        token ใช้ได้ครั้งเดียวและหมดอายุใน 30 นาที สำเร็จแล้วทุกเซสชันของผู้ใช้ถูกเพิกถอน; token ไม่ถูกต้อง/ใช้แล้ว/หมดอายุ ตอบ 400 `INVALID_RESET_TOKEN`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordInput'
+      responses:
+        '200':
+          description: ตั้งรหัสผ่านใหม่สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BookError'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/BookInternalServerError'
 
@@ -305,6 +446,9 @@ paths:
     delete:
       tags: [Books]
       summary: ลบหนังสือ (เฉพาะ admin)
+      description: |
+        ไม่เคยถูกยืม = ลบจริง; เคยถูกยืมแล้ว = เก็บเข้าคลัง (`archived: true`, ประวัติการยืมยังอยู่);
+        ยังมีรายการยืมค้าง = 409 `BOOK_HAS_ACTIVE_LOANS`
       operationId: delete_api_books_id
       responses:
         '429':
@@ -630,7 +774,9 @@ paths:
       tags: [Members]
       summary: ลบสมาชิก (เฉพาะ admin)
       operationId: delete_api_members_id
-      description: ลบสมาชิกที่ไม่มีข้อจำกัดจากประวัติการยืม
+      description: |
+        ไม่เคยยืม = ลบจริง; เคยยืมแล้ว = เก็บเข้าคลัง (`archived: true`) พร้อมปิดบัญชีผู้ใช้ที่ผูกอยู่ (เข้าสู่ระบบไม่ได้);
+        ยังมีรายการยืมค้าง = 409 `MEMBER_HAS_ACTIVE_LOANS`
       responses:
         '429':
           $ref: '#/components/responses/TooManyRequests'
@@ -649,7 +795,7 @@ paths:
         '404':
           $ref: '#/components/responses/CirculationError'
         '409':
-          description: ไม่สามารถลบสมาชิกที่มีประวัติการยืมได้
+          description: สมาชิกยังมีรายการยืมค้างอยู่ (code MEMBER_HAS_ACTIVE_LOANS)
           content:
             application/json:
               schema:
@@ -718,6 +864,9 @@ paths:
     post:
       tags: [Loans]
       summary: ยืมหนังสือ (user ยืมได้เฉพาะในนามตัวเอง (ไม่ต้องส่ง member_id) ยกเว้น admin)
+      description: |
+        409 เมื่อหนังสือหมด หรือสมาชิกยืมครบ 5 เล่มแล้ว (`LOAN_LIMIT_REACHED`);
+        การตรวจจำนวนที่ยืมค้างล็อกแถวสมาชิก จึงไม่เกินโควตาแม้ยืมพร้อมกันหลายคำขอ
       operationId: post_api_loans
       requestBody:
         required: true
@@ -787,7 +936,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: token ที่ได้จาก POST /api/auth/login (หมดอายุใน 2 ชั่วโมง)
+      description: token ที่ได้จาก POST /api/auth/login (หมดอายุใน 15 นาที ต่ออายุด้วย POST /api/auth/refresh)
 
   parameters:
     Id:
@@ -954,7 +1103,11 @@ components:
           properties:
             token:
               type: string
-              description: JWT สำหรับแนบ header Authorization (Bearer)
+              description: access token (JWT อายุ 15 นาที) สำหรับแนบ header Authorization (Bearer)
+            expires_in:
+              type: integer
+              description: อายุของ access token เป็นวินาที
+              example: 900
             user:
               allOf:
                 - $ref: '#/components/schemas/AuthUser'
@@ -963,6 +1116,40 @@ components:
                     name:
                       type: string
                       example: สมชาย ใจดี
+
+    MessageResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+
+    ForgotPasswordInput:
+      type: object
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          description: ชื่อผู้ใช้หรืออีเมลของสมาชิก
+          example: somchai@example.com
+
+    ResetPasswordInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: token จากลิงก์ที่ได้รับ (`?reset_token=...`)
+        password:
+          type: string
+          minLength: 8
+          example: NewPassw0rd!
 
     MeResponse:
       type: object
@@ -1187,6 +1374,9 @@ components:
           properties:
             deleted_book_id:
               type: integer
+            archived:
+              type: boolean
+              description: true = มีประวัติการยืม จึงเก็บเข้าคลัง (ซ่อน) แทนการลบจริง
 
     ExternalInfoResponse:
       type: object
@@ -1421,6 +1611,9 @@ components:
         member_id:
           type: integer
           example: 1
+        archived:
+          type: boolean
+          description: true = เก็บเข้าคลังเพราะมีประวัติการยืม
 
     MemberLoansResponse:
       type: object
@@ -1458,6 +1651,14 @@ components:
           type: string
           format: date
           nullable: true
+        days_overdue:
+          type: integer
+          description: จำนวนวันที่เกินกำหนด (ถึงวันคืน หรือถึงวันนี้ถ้ายังไม่คืน)
+          example: 0
+        fine_amount:
+          type: number
+          description: ค่าปรับ (บาท) วันละ FINE_PER_DAY (ค่าเริ่มต้น 5)
+          example: 0
 
     OverdueLoansResponse:
       type: object
@@ -1487,6 +1688,14 @@ components:
         due_date:
           type: string
           format: date
+        days_overdue:
+          type: integer
+          description: จำนวนวันที่เกินกำหนด (ถึงวันคืน หรือถึงวันนี้ถ้ายังไม่คืน)
+          example: 0
+        fine_amount:
+          type: number
+          description: ค่าปรับ (บาท) วันละ FINE_PER_DAY (ค่าเริ่มต้น 5)
+          example: 0
 
     LoanInput:
       type: object
@@ -1539,3 +1748,9 @@ components:
           example: คืนหนังสือสำเร็จ
         loan_id:
           type: integer
+        days_overdue:
+          type: integer
+          description: จำนวนวันที่คืนช้า (0 = ไม่เกินกำหนด)
+        fine_amount:
+          type: number
+          description: ค่าปรับ (บาท) = days_overdue × FINE_PER_DAY

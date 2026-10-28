@@ -268,7 +268,10 @@ describe("Book API: cache ผู้แต่งและหมวดหมู่
     pool.query.mockResolvedValueOnce([[detail]]).mockResolvedValueOnce([[]]);
     await as(app, admin).put("/api/books/5").send(book);
 
-    pool.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    conn.query
+      .mockResolvedValueOnce([[{ book_id: 5 }]])
+      .mockResolvedValueOnce([[{ total: 0, active: 0 }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
     await as(app, admin).delete("/api/books/5");
 
     const prefixes = invalidate.mock.calls.map((c) => c[0]);

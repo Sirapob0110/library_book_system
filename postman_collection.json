@@ -24,6 +24,22 @@
     {
       "key": "gatewayUrl",
       "value": "http://localhost:8000"
+    },
+    {
+      "key": "forgotMessage",
+      "value": ""
+    },
+    {
+      "key": "ruleMemberId",
+      "value": ""
+    },
+    {
+      "key": "ruleMemberId2",
+      "value": ""
+    },
+    {
+      "key": "ruleLoanId",
+      "value": ""
     }
   ],
   "item": [
@@ -536,6 +552,348 @@
                   "type": "string"
                 }
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth session: refresh, logout, ลืมรหัสผ่าน",
+      "item": [
+        {
+          "name": "POST /api/auth/refresh - ต่ออายุด้วย cookie (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 และได้ access token ใหม่ + expires_in 900\", function () { pm.response.to.have.status(200); const d = pm.response.json().data; pm.expect(d.token).to.be.a('string'); pm.expect(d.expires_in).to.eql(900); pm.expect(d.user.username).to.eql('somchai'); });",
+                  "pm.test(\"ตั้ง cookie refresh_token แบบ HttpOnly\", function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c.toLowerCase()).to.include('httponly'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/refresh - Origin แปลกปลอม (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 UNTRUSTED_ORIGIN\", function () { pm.response.to.have.status(403); pm.expect(pm.response.json().code).to.eql('UNTRUSTED_ORIGIN'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "https://evil.example"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/logout - ออกจากระบบ (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 และสั่งล้าง cookie\", function () { pm.response.to.have.status(200); pm.expect(pm.response.headers.get('Set-Cookie') || '').to.include('refresh_token=;'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/refresh - หลังออกจากระบบ (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 INVALID_REFRESH_TOKEN\", function () { pm.response.to.have.status(401); pm.expect(pm.response.json().code).to.eql('INVALID_REFRESH_TOKEN'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/forgot-password - บัญชีที่มีอยู่ (202)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"202 และไม่มี token ใน response\", function () { pm.response.to.have.status(202); pm.expect(pm.response.text()).to.not.match(/reset_token|\"token\"/); pm.collectionVariables.set('forgotMessage', pm.response.json().data.message); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"somchai\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/forgot-password - ไม่มีบัญชี (202 ข้อความเดียวกัน)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"202 ข้อความเหมือนกรณีมีบัญชี (กันการไล่เดา)\", function () { pm.response.to.have.status(202); pm.expect(pm.response.json().data.message).to.eql(pm.collectionVariables.get('forgotMessage')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"no_such_user_zzz\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/reset-password - token ไม่ถูกต้อง (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 INVALID_RESET_TOKEN\", function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('INVALID_RESET_TOKEN'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n  \"password\": \"NewPassw0rd!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/reset-password - รหัสผ่านสั้น (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 VALIDATION_ERROR\", function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n  \"password\": \"short\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
             }
           }
         }
@@ -2894,6 +3252,309 @@
               "path": [
                 "api",
                 "members"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "กติกาการยืม: ค่าปรับ, soft delete (ผ่าน Gateway)",
+      "item": [
+        {
+          "name": "POST /api/members - สร้างสมาชิกทดสอบ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201\", function () { pm.response.to.have.status(201); pm.collectionVariables.set('ruleMemberId', pm.response.json().member_id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ทดสอบ กติกา\",\n  \"email\": \"rules-{{$timestamp}}@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/loans - ยืมย้อนหลัง (เกินกำหนดแล้ว)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201\", function () { pm.response.to.have.status(201); pm.collectionVariables.set('ruleLoanId', pm.response.json().loan_id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/loans",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"book_id\": 1,\n  \"member_id\": \"{{ruleMemberId}}\",\n  \"loan_date\": \"2020-01-01\",\n  \"due_date\": \"2020-01-08\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/members/{id}/loans - มี days_overdue และ fine_amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"ค่าปรับ = วันที่เกิน × 5\", function () { pm.response.to.have.status(200); const l = pm.response.json().data[0]; pm.expect(l.days_overdue).to.be.above(0); pm.expect(l.fine_amount).to.eql(l.days_overdue * 5); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members/{{ruleMemberId}}/loans",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members",
+                "{{ruleMemberId}}",
+                "loans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/members/{id} - ยังมีรายการยืมค้าง (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409 MEMBER_HAS_ACTIVE_LOANS\", function () { pm.response.to.have.status(409); pm.expect(pm.response.json().code).to.eql('MEMBER_HAS_ACTIVE_LOANS'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members/{{ruleMemberId}}",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members",
+                "{{ruleMemberId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/loans/{id}/return - คืนช้า มีค่าปรับ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 และ fine_amount > 0\", function () { pm.response.to.have.status(200); const r = pm.response.json(); pm.expect(r.fine_amount).to.be.above(0); pm.expect(r.fine_amount).to.eql(r.days_overdue * 5); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/loans/{{ruleLoanId}}/return",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "loans",
+                "{{ruleLoanId}}",
+                "return"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/members/{id} - มีประวัติ เก็บเข้าคลัง (archived)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 archived = true\", function () { pm.response.to.have.status(200); pm.expect(pm.response.json().archived).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members/{{ruleMemberId}}",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members",
+                "{{ruleMemberId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/members - สมาชิกใหม่ที่ไม่เคยยืม",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201\", function () { pm.response.to.have.status(201); pm.collectionVariables.set('ruleMemberId2', pm.response.json().member_id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ทดสอบ ลบจริง\",\n  \"email\": \"rules2-{{$timestamp}}@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/members/{id} - ไม่มีประวัติ ลบจริง (archived=false)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 archived = false\", function () { pm.response.to.have.status(200); pm.expect(pm.response.json().archived).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/members/{{ruleMemberId2}}",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "members",
+                "{{ruleMemberId2}}"
               ]
             }
           }
